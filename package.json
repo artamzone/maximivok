@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Детерминированный прототип расчёта отопления ИВОК (TASK-01)",
+  "description": "Локальные карточки объектов и расчёты отопления ИВОК (TASK-01 и TASK-02)",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -12,7 +12,7 @@
     "web": "npm run build --silent && node dist/src/web.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

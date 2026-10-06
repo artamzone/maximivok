@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { get as httpGet } from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
 import { createWebServer } from "../src/server.js";
 
 async function withServer(run: (baseUrl: string) => Promise<void>): Promise<void> {
-  const server = createWebServer();
+  const server = createWebServer({ databasePath: ":memory:" });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address() as AddressInfo;
@@ -49,7 +50,7 @@ test("GET / открывает веб-форму", async () => {
 
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type") ?? "", /text\/html/);
-    assert.match(html, /Предварительный расчёт отопления/);
+    assert.match(html, /Карточки объектов и расчёты отопления/);
     assert.match(html, /id="heating-form"/);
   });
 });
@@ -92,7 +93,133 @@ test("API возвращает понятные ошибки валидации"
 
 test("неизвестный адрес возвращает 404", async () => {
   await withServer(async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/missing`);
-    assert.equal(response.status, 404);
+    await new Promise<void>((resolve, reject) => {
+      const request = httpGet(`${baseUrl}/missing`, (response) => {
+        assert.equal(response.statusCode, 404);
+        response.resume();
+        response.once("end", resolve);
+      });
+      request.once("error", reject);
+    });
+  });
+});
+
+
+function validObjectPayload(): Record<string, unknown> {
+  return {
+    client: { name: "Иван Петров", phone: null, email: null, notes: null },
+    object: { address: "Москва, ул. Примерная, 1", name: "Загородный дом", notes: null },
+    calculation: {
+      input: validInput(),
+      parameterMetadata: [{
+        path: "input.houseAreaM2",
+        source: "client",
+        verificationStatus: "confirmed",
+      }],
+    },
+  };
+}
+
+test("API создаёт, читает и обновляет карточку объекта с версиями расчёта", async () => {
+  await withServer(async (baseUrl) => {
+    const createResponse = await fetch(`${baseUrl}/api/objects`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(validObjectPayload()),
+    });
+    const created = (await createResponse.json()) as {
+      id: string;
+      organizationId: string;
+      client: { name: string };
+      object: { address: string };
+      calculations: Array<{ parameters: Array<{ path: string; source: string }> }>;
+    };
+    assert.equal(createResponse.status, 201);
+    assert.equal(created.organizationId, "org-local");
+    assert.equal(created.client.name, "Иван Петров");
+    assert.ok(created.calculations[0]?.parameters.some((parameter) =>
+      parameter.path === "input.houseAreaM2" && parameter.source === "client"));
+
+    const listResponse = await fetch(`${baseUrl}/api/objects`);
+    const list = (await listResponse.json()) as { objects: Array<{ id: string; clientName: string }> };
+    assert.equal(listResponse.status, 200);
+    assert.deepEqual(list.objects.map((object) => object.id), [created.id]);
+
+    const updateResponse = await fetch(`${baseUrl}/api/objects/${created.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client: { name: "Пётр Иванов" },
+        object: { address: "Тверь, ул. Новая, 2" },
+      }),
+    });
+    assert.equal(updateResponse.status, 200);
+
+    const calculationResponse = await fetch(`${baseUrl}/api/objects/${created.id}/calculations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ input: { ...validInput(), houseAreaM2: 140 } }),
+    });
+    assert.equal(calculationResponse.status, 201);
+
+    const detailsResponse = await fetch(`${baseUrl}/api/objects/${created.id}`);
+    const details = (await detailsResponse.json()) as {
+      client: { name: string };
+      object: { address: string };
+      calculations: unknown[];
+    };
+    assert.equal(details.client.name, "Пётр Иванов");
+    assert.equal(details.object.address, "Тверь, ул. Новая, 2");
+    assert.equal(details.calculations.length, 2);
+  });
+});
+
+test("API требует имя клиента и адрес объекта", async () => {
+  await withServer(async (baseUrl) => {
+    const payload = validObjectPayload();
+    payload.client = { name: "" };
+    payload.object = { address: "" };
+    const response = await fetch(`${baseUrl}/api/objects`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = (await response.json()) as { issues: string[] };
+    assert.equal(response.status, 400);
+    assert.ok(body.issues.some((issue) => issue.includes("client.name")));
+    assert.ok(body.issues.some((issue) => issue.includes("object.address")));
+  });
+});
+
+
+test("GET /app.js и /styles.css загружает ресурсы интерфейса", async () => {
+  await withServer(async (baseUrl) => {
+    const [scriptResponse, styleResponse] = await Promise.all([
+      fetch(`${baseUrl}/app.js`),
+      fetch(`${baseUrl}/styles.css`),
+    ]);
+    assert.equal(scriptResponse.status, 200);
+    assert.match(scriptResponse.headers.get("content-type") ?? "", /javascript/);
+    assert.match(await scriptResponse.text(), /\/api\/objects/);
+    assert.equal(styleResponse.status, 200);
+    assert.match(styleResponse.headers.get("content-type") ?? "", /text\/css/);
+  });
+});
+
+
+test("API сохраняет неполную карточку без расчёта", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/objects`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client: { name: "Клиент без полного опроса" },
+        object: { address: "Адрес уточняется, дом 1" },
+      }),
+    });
+    const details = (await response.json()) as { calculations: unknown[]; client: { name: string } };
+    assert.equal(response.status, 201);
+    assert.equal(details.client.name, "Клиент без полного опроса");
+    assert.deepEqual(details.calculations, []);
   });
 });

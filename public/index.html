@@ -3,59 +3,105 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Расчёт отопления ИВОК</title>
+    <title>Объекты и расчёты ИВОК</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="page-header">
       <div>
-        <p class="eyebrow">ИВОК · TASK-01</p>
-        <h1>Предварительный расчёт отопления</h1>
-        <p class="intro">Заполните параметры дома и помещений. Неизвестные случаи будут переданы инженеру.</p>
+        <p class="eyebrow">ИВОК · TASK-02 · локальный режим</p>
+        <h1>Карточки объектов и расчёты отопления</h1>
+        <p class="intro">Сохраняйте данные клиента, объекта и версии расчётов в локальной базе SQLite.</p>
       </div>
     </header>
 
-    <main>
-      <form id="heating-form">
-        <section class="panel">
-          <div class="section-heading">
-            <div><span class="step">01</span><h2>Дом</h2></div>
-          </div>
-          <div class="fields fields-house">
-            <label>Площадь дома, м²<input name="houseAreaM2" type="number" min="0.01" step="0.01" value="120" required /></label>
-            <label>Источник отопления
-              <select name="heatSource">
-                <option value="gas">Газовый котёл</option>
-                <option value="electric">Электрокотёл</option>
-                <option value="solid_fuel">Твердотопливный котёл</option>
-                <option value="pellet">Пеллетный котёл</option>
-                <option value="unknown">Не определён</option>
-              </select>
-            </label>
-            <label>Доступная электромощность, кВт<input name="availableElectricPowerKw" type="number" min="0" step="0.1" placeholder="Не указана" /></label>
-            <label>Длина контура, м<input name="circuitLengthM" type="number" min="0.01" step="0.01" value="80" /></label>
-            <label>Жильцов<input name="residents" type="number" min="0" step="1" value="3" required /></label>
-            <label>Ванн<input name="baths" type="number" min="0" step="1" value="0" required /></label>
-            <label>Душей<input name="showers" type="number" min="0" step="1" value="1" required /></label>
-            <label class="check-field"><input name="includeIndirectWaterHeater" type="checkbox" checked /><span>Нужен бойлер косвенного нагрева</span></label>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="section-heading">
-            <div><span class="step">02</span><h2>Помещения</h2></div>
-            <button class="secondary" id="add-room" type="button">+ Добавить помещение</button>
-          </div>
-          <div id="rooms" class="rooms"></div>
-        </section>
-
-        <div class="submit-row">
-          <p>Расчёт предварительный и не заменяет проверку инженера.</p>
-          <button class="primary" type="submit">Рассчитать отопление</button>
+    <main class="workspace">
+      <aside class="panel object-browser" aria-label="Сохранённые объекты">
+        <div class="section-heading">
+          <div><span class="step">00</span><h2>Объекты</h2></div>
+          <button class="secondary compact" id="new-object" type="button">+ Новый</button>
         </div>
-      </form>
+        <button class="secondary object-toggle" id="toggle-objects" type="button" aria-expanded="false" aria-controls="object-browser-content">Показать объекты</button>
+        <div id="object-browser-content" class="object-browser-content">
+          <p class="hint">Выберите карточку, чтобы загрузить последнюю версию расчёта.</p>
+          <div id="object-list" class="object-list"><p class="muted">Загрузка…</p></div>
+        </div>
+      </aside>
 
-      <section id="result" class="panel result" hidden aria-live="polite"></section>
+      <div class="editor">
+        <form id="heating-form">
+          <section class="panel">
+            <div class="section-heading"><div><span class="step">01</span><h2>Клиент и объект</h2></div></div>
+            <div class="fields">
+              <label>Имя клиента *<input name="clientName" type="text" maxlength="200" required /></label>
+              <label>Телефон<input name="clientPhone" type="tel" maxlength="100" /></label>
+              <label>Email<input name="clientEmail" type="email" maxlength="200" /></label>
+              <label>Название объекта<input name="objectName" type="text" maxlength="200" placeholder="Например, Дом в Сосновке" /></label>
+              <label class="wide">Адрес объекта *<input name="objectAddress" type="text" maxlength="500" required /></label>
+              <label class="wide">Комментарий клиента<textarea name="clientNotes" maxlength="2000" rows="2"></textarea></label>
+              <label class="wide">Комментарий по объекту<textarea name="objectNotes" maxlength="2000" rows="2"></textarea></label>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading"><div><span class="step">02</span><h2>Исходные данные</h2></div></div>
+            <div class="fields fields-house">
+              <label>Площадь дома, м²<input name="houseAreaM2" type="number" min="0.01" step="0.01" value="120" required /></label>
+              <label>Источник отопления
+                <select name="heatSource">
+                  <option value="gas">Газовый котёл</option>
+                  <option value="electric">Электрокотёл</option>
+                  <option value="solid_fuel">Твердотопливный котёл</option>
+                  <option value="pellet">Пеллетный котёл</option>
+                  <option value="unknown">Не определён</option>
+                </select>
+              </label>
+              <label>Доступная электромощность, кВт<input name="availableElectricPowerKw" type="number" min="0" step="0.1" placeholder="Не указана" /></label>
+              <label>Длина контура, м<input name="circuitLengthM" type="number" min="0.01" step="0.01" value="80" /></label>
+              <label>Жильцов<input name="residents" type="number" min="0" step="1" value="3" required /></label>
+              <label>Ванн<input name="baths" type="number" min="0" step="1" value="0" required /></label>
+              <label>Душей<input name="showers" type="number" min="0" step="1" value="1" required /></label>
+              <label class="check-field"><input name="includeIndirectWaterHeater" type="checkbox" checked /><span>Нужен бойлер косвенного нагрева</span></label>
+            </div>
+            <div class="provenance">
+              <p><strong>Источник и проверка введённых параметров</strong></p>
+              <label>Источник
+                <select name="parameterSource">
+                  <option value="engineer">Инженер</option>
+                  <option value="client">Клиент</option>
+                  <option value="project_document">Проектная документация</option>
+                </select>
+              </label>
+              <label>Статус
+                <select name="parameterStatus">
+                  <option value="unverified">Не проверено</option>
+                  <option value="confirmed">Подтверждено</option>
+                  <option value="requires_engineer_review">Нужна проверка инженера</option>
+                </select>
+              </label>
+              <p class="hint">Статус сохраняется отдельно для каждого введённого параметра. Вычисленные значения помечаются как результат расчёта.</p>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading">
+              <div><span class="step">03</span><h2>Помещения</h2></div>
+              <button class="secondary" id="add-room" type="button">+ Добавить помещение</button>
+            </div>
+            <div id="rooms" class="rooms"></div>
+          </section>
+
+          <div class="submit-row">
+            <p id="save-note">Можно сохранить только карточку, заполнив имя клиента и адрес.</p>
+            <div class="submit-actions">
+              <button class="secondary" id="save-card" type="button">Сохранить карточку</button>
+              <button class="primary" type="submit">Сохранить и рассчитать</button>
+            </div>
+          </div>
+        </form>
+
+        <section id="result" class="panel result" hidden aria-live="polite"></section>
+      </div>
     </main>
 
     <template id="room-template">
