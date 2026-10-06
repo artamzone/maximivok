@@ -46,27 +46,28 @@
           <section class="panel">
             <div class="section-heading"><div><span class="step">02</span><h2>Исходные данные</h2></div></div>
             <div class="fields fields-house">
-              <label>Площадь дома, м²<input name="houseAreaM2" type="number" min="0.01" step="0.01" value="120" required /></label>
+              <label>Площадь дома, м²<input name="houseAreaM2" type="number" min="0.01" step="0.01" placeholder="Неизвестно" /></label>
               <label>Источник отопления
                 <select name="heatSource">
+                  <option value="unknown">Не определён</option>
                   <option value="gas">Газовый котёл</option>
                   <option value="electric">Электрокотёл</option>
                   <option value="solid_fuel">Твердотопливный котёл</option>
                   <option value="pellet">Пеллетный котёл</option>
-                  <option value="unknown">Не определён</option>
                 </select>
               </label>
               <label>Доступная электромощность, кВт<input name="availableElectricPowerKw" type="number" min="0" step="0.1" placeholder="Не указана" /></label>
-              <label>Длина контура, м<input name="circuitLengthM" type="number" min="0.01" step="0.01" value="80" /></label>
-              <label>Жильцов<input name="residents" type="number" min="0" step="1" value="3" required /></label>
-              <label>Ванн<input name="baths" type="number" min="0" step="1" value="0" required /></label>
-              <label>Душей<input name="showers" type="number" min="0" step="1" value="1" required /></label>
-              <label class="check-field"><input name="includeIndirectWaterHeater" type="checkbox" checked /><span>Нужен бойлер косвенного нагрева</span></label>
+              <label>Длина контура, м<input name="circuitLengthM" type="number" min="0.01" step="0.01" placeholder="Неизвестно" /></label>
+              <label>Жильцов<input name="residents" type="number" min="0" step="1" placeholder="Неизвестно" /></label>
+              <label>Ванн<input name="baths" type="number" min="0" step="1" placeholder="Неизвестно" /></label>
+              <label>Душей<input name="showers" type="number" min="0" step="1" placeholder="Неизвестно" /></label>
+              <label>Бойлер косвенного нагрева<select name="includeIndirectWaterHeater"><option value="">Неизвестно</option><option value="true">Нужен</option><option value="false">Не нужен</option></select></label>
             </div>
             <div class="provenance">
               <p><strong>Источник и проверка введённых параметров</strong></p>
               <label>Источник
                 <select name="parameterSource">
+                  <option value="">Не указан</option>
                   <option value="engineer">Инженер</option>
                   <option value="client">Клиент</option>
                   <option value="project_document">Проектная документация</option>
@@ -88,6 +89,7 @@
               <div><span class="step">03</span><h2>Помещения</h2></div>
               <button class="secondary" id="add-room" type="button">+ Добавить помещение</button>
             </div>
+            <p class="hint">Добавьте только реальные помещения. Пустое поле означает «неизвестно»; 0 — подтверждённое отсутствие. Можно рассчитать доступные блоки без полного ввода.</p>
             <div id="rooms" class="rooms"></div>
           </section>
 
@@ -109,14 +111,14 @@
         <div class="room-title"><h3>Помещение <span class="room-number"></span></h3><button class="remove-room" type="button">Удалить</button></div>
         <div class="fields">
           <label>Название<input data-field="name" type="text" value="Комната" required /></label>
-          <label>Площадь, м²<input data-field="areaM2" type="number" min="0.01" step="0.01" value="20" required /></label>
-          <label>Высота потолка, м<input data-field="ceilingHeightM" type="number" min="0.01" step="0.01" value="2.8" required /></label>
-          <label>Тёплый пол, м²<input data-field="floorHeatingAreaM2" type="number" min="0" step="0.01" value="15" required /></label>
+          <label>Площадь, м²<input data-field="areaM2" type="number" min="0.01" step="0.01" placeholder="Неизвестно" /></label>
+          <label>Высота потолка, м<input data-field="ceilingHeightM" type="number" min="0.01" step="0.01" placeholder="Неизвестно" /></label>
+          <label>Тёплый пол, м²<input data-field="floorHeatingAreaM2" type="number" min="0" step="0.01" placeholder="Неизвестно" /></label>
         </div>
         <div class="checks">
-          <label><input data-field="hasStandardWindows" type="checkbox" checked /> Обычные окна</label>
-          <label><input data-field="hasPanoramicWindows" type="checkbox" /> Панорамные окна</label>
-          <label><input data-field="hasRadiator" type="checkbox" checked /> Радиатор</label>
+          <label>Обычные окна<select data-field="hasStandardWindows"><option value="">Неизвестно</option><option value="true">Есть</option><option value="false">Нет</option></select></label>
+          <label>Панорамные окна<select data-field="hasPanoramicWindows"><option value="">Неизвестно</option><option value="true">Есть</option><option value="false">Нет</option></select></label>
+          <label>Радиатор<select data-field="hasRadiator"><option value="">Неизвестно</option><option value="true">Есть / нужен</option><option value="false">Нет / не нужен</option></select></label>
         </div>
       </article>
     </template>

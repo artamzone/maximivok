@@ -1,0 +1,138 @@
+{
+  "status": "requires_engineer_review",
+  "input": {
+    "houseAreaM2": 120,
+    "rooms": [
+      {
+        "id": "living-room",
+        "name": "Гостиная",
+        "areaM2": 30,
+        "ceilingHeightM": 2.8,
+        "hasStandardWindows": true,
+        "hasPanoramicWindows": false,
+        "floorHeatingAreaM2": 25,
+        "hasRadiator": true
+      },
+      {
+        "id": "bedroom",
+        "name": "Спальня",
+        "areaM2": 18,
+        "ceilingHeightM": 2.8,
+        "hasStandardWindows": true,
+        "hasPanoramicWindows": false,
+        "floorHeatingAreaM2": 15,
+        "hasRadiator": true
+      }
+    ],
+    "heatSource": "gas",
+    "availableElectricPowerKw": null,
+    "residents": 3,
+    "baths": 0,
+    "showers": 1,
+    "includeIndirectWaterHeater": true
+  },
+  "floorHeating": {
+    "status": "calculated",
+    "areaM2": 40,
+    "pipeLengthM": 240,
+    "circuitLengthM": 80,
+    "circuitCount": 3,
+    "averageCircuitLengthM": 80,
+    "collectors": [
+      3
+    ],
+    "mixingUnitCount": 1,
+    "installationCostRub": 36000,
+    "insulationInstallationCostRub": 4000
+  },
+  "radiators": [
+    {
+      "roomId": "living-room",
+      "roomName": "Гостиная",
+      "status": "calculated",
+      "requiredPowerW": 2100,
+      "reductionPercent": 30,
+      "warnings": []
+    },
+    {
+      "roomId": "bedroom",
+      "roomName": "Спальня",
+      "status": "calculated",
+      "requiredPowerW": 1260,
+      "reductionPercent": 30,
+      "warnings": []
+    }
+  ],
+  "boiler": {
+    "status": "requires_engineer_review",
+    "recommendedPowerKw": 24,
+    "note": "Предварительная мощность по площади; при бойлере косвенного нагрева инженер проверяет запас для ГВС."
+  },
+  "waterHeater": {
+    "status": "calculated",
+    "recommendedVolumeL": 150,
+    "note": "Для трёх жильцов и душа принят объём 150 л."
+  },
+  "boilerRoom": {
+    "status": "calculated",
+    "templateCode": "HEAT_SOURCE_FLOOR_AND_RADIATORS",
+    "includesIndirectWaterHeater": true,
+    "note": "Котёл, коллектор ТП со смесительным узлом и коллектор радиаторов."
+  },
+  "appliedRules": [
+    {
+      "code": "FH_PIPE_6M_PER_M2",
+      "description": "На 1 м² тёплого пола принято 6 пог. м трубы."
+    },
+    {
+      "code": "FH_CIRCUITS_ROUND_UP",
+      "description": "Количество контуров округляется вверх."
+    },
+    {
+      "code": "FH_COLLECTOR_MAX_12",
+      "description": "Один коллектор обслуживает не более 12 контуров."
+    },
+    {
+      "code": "FH_COLLECTORS_BALANCED",
+      "description": "Контуры делятся между коллекторами максимально равномерно."
+    },
+    {
+      "code": "FH_INSTALLATION_900_RUB_M2",
+      "description": "Монтаж тёплого пола: 900 ₽/м²."
+    },
+    {
+      "code": "FH_INSULATION_100_RUB_M2",
+      "description": "Укладка утеплителя: 100 ₽/м²."
+    },
+    {
+      "code": "FH_MIXING_UNIT_WITH_RADIATORS",
+      "description": "При наличии радиаторов нужен один смесительный узел на коллектор ТП."
+    },
+    {
+      "code": "RAD_100W_PER_M2",
+      "description": "Базовая предварительная мощность радиаторов: 100 Вт/м²."
+    },
+    {
+      "code": "RAD_FLOOR_HEATING_REDUCTION_30",
+      "description": "При наличии тёплого пола мощность радиатора уменьшается на 30%."
+    },
+    {
+      "code": "RAD_STANDARD_CEILING_MAX_3_2",
+      "description": "Стандартное условие действует при высоте потолка до 3,2 м."
+    },
+    {
+      "code": "BOILER_GAS_AREA_TABLE",
+      "description": "Мощность газового котла выбирается по таблице площади дома."
+    },
+    {
+      "code": "DHW_VOLUME_TABLE",
+      "description": "Объём бойлера выбирается по числу жильцов и сантехнических приборов."
+    },
+    {
+      "code": "BOILER_ROOM_FIXED_TEMPLATE",
+      "description": "Гидравлическая схема выбирается только из фиксированного списка."
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}

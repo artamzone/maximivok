@@ -8,7 +8,7 @@ import type {
 } from "./projects.js";
 import { InputValidationError, parseHeatingInput } from "./validation.js";
 
-const inputSources = new Set<ParameterSource>(["client", "engineer", "project_document"]);
+const inputSources = new Set<ParameterSource>(["", "client", "engineer", "project_document"]);
 const inputStatuses = new Set(["unverified", "confirmed", "requires_engineer_review"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {

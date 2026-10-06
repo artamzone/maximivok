@@ -21,7 +21,8 @@ function requireString(value: unknown, path: string, issues: string[]): string {
   return value;
 }
 
-function requireBoolean(value: unknown, path: string, issues: string[]): boolean {
+function requireBoolean(value: unknown, path: string, issues: string[]): boolean | null {
+  if (value === null || value === undefined) return null;
   if (typeof value !== "boolean") {
     issues.push(`${path}: требуется true или false`);
     return false;
@@ -34,7 +35,8 @@ function requireNumber(
   path: string,
   issues: string[],
   options: { min: number; integer?: boolean },
-): number {
+): number | null {
+  if (value === null || value === undefined) return null;
   if (typeof value !== "number" || !Number.isFinite(value)) {
     issues.push(`${path}: требуется конечное число`);
     return options.min;
@@ -67,7 +69,7 @@ function parseRoom(value: unknown, index: number, issues: string[]): RoomInput {
     issues,
     { min: 0 },
   );
-  if (floorHeatingAreaM2 > areaM2) {
+  if (floorHeatingAreaM2 !== null && areaM2 !== null && floorHeatingAreaM2 > areaM2) {
     issues.push(`${path}.floorHeatingAreaM2: площадь тёплого пола не может превышать площадь помещения`);
   }
 
@@ -87,14 +89,17 @@ export function parseHeatingInput(value: unknown): HeatingInput {
   const issues: string[] = [];
   if (!isRecord(value)) throw new InputValidationError(["корневое значение должно быть объектом"]);
 
-  const rooms = Array.isArray(value.rooms)
-    ? value.rooms.map((room, index) => parseRoom(room, index, issues))
-    : (issues.push("rooms: требуется массив помещений"), []);
-  if (rooms.length === 0) issues.push("rooms: требуется хотя бы одно помещение");
+  const rooms = value.rooms === undefined || value.rooms === null
+    ? []
+    : Array.isArray(value.rooms)
+      ? value.rooms.map((room, index) => parseRoom(room, index, issues))
+      : (issues.push("rooms: требуется массив помещений"), []);
 
   const heatSource = typeof value.heatSource === "string" && heatSources.has(value.heatSource as HeatSource)
     ? (value.heatSource as HeatSource)
-    : (issues.push("heatSource: допустимы gas, electric, solid_fuel, pellet, unknown"), "unknown");
+    : value.heatSource === null || value.heatSource === undefined
+      ? "unknown"
+      : (issues.push("heatSource: допустимы gas, electric, solid_fuel, pellet, unknown"), "unknown");
 
   let availableElectricPowerKw: number | null = null;
   if (value.availableElectricPowerKw !== null) {
@@ -128,8 +133,8 @@ export function parseHeatingInput(value: unknown): HeatingInput {
         }),
   };
 
-  const roomArea = rooms.reduce((sum, room) => sum + room.areaM2, 0);
-  if (roomArea > result.houseAreaM2 + 0.001) {
+  const roomArea = rooms.reduce((sum, room) => sum + (room.areaM2 ?? 0), 0);
+  if (result.houseAreaM2 !== null && roomArea > result.houseAreaM2 + 0.001) {
     issues.push("rooms: суммарная площадь помещений не может превышать площадь дома");
   }
 

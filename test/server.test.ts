@@ -55,6 +55,26 @@ test("GET / открывает веб-форму", async () => {
   });
 });
 
+test("форма допускает неизвестные параметры без предзаполненных значений", async () => {
+  await withServer(async (baseUrl) => {
+    const html = await (await fetch(baseUrl)).text();
+    const boilerControl = html.match(/<select name="includeIndirectWaterHeater">([\s\S]*?)<\/select>/)?.[1];
+    assert.ok(boilerControl);
+    assert.match(boilerControl, /value=""/);
+    assert.match(boilerControl, /value="true"/);
+    assert.match(boilerControl, /value="false"/);
+    assert.match(html, /<select name="parameterSource">\s*<option value="">Не указан<\/option>/);
+    for (const field of ["houseAreaM2", "residents", "baths", "showers", "circuitLengthM"]) {
+      const control = html.match(new RegExp(`<input name="${field}"[^>]*>`))?.[0];
+      assert.ok(control);
+      assert.doesNotMatch(control, /\b(?:value|required)=?/);
+    }
+    const js = await (await fetch(`${baseUrl}/app.js`)).text();
+    assert.match(js, /Стоимость известных работ/);
+    assert.match(js, /Цены материалов не заданы/);
+  });
+});
+
 test("POST /api/calculate возвращает расчёт", async () => {
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/calculate`, {
@@ -81,13 +101,27 @@ test("API возвращает понятные ошибки валидации"
     const response = await fetch(`${baseUrl}/api/calculate`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ residents: "" }),
     });
     const payload = (await response.json()) as { error: string; issues: string[] };
 
     assert.equal(response.status, 400);
     assert.equal(payload.error, "Некорректные входные данные.");
     assert.ok(payload.issues.length > 0);
+  });
+});
+
+test("API считает частичный ввод, не превращая пропуски в нули", async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/calculate`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ houseAreaM2: 120, heatSource: "gas", includeIndirectWaterHeater: false }),
+    });
+    const report = await response.json() as { floorHeating: { pipeLengthM: number | null; missingParameters: string[] }; boiler: { recommendedPowerKw: number } };
+    assert.equal(response.status, 200);
+    assert.equal(report.floorHeating.pipeLengthM, null);
+    assert.deepEqual(report.floorHeating.missingParameters, ["rooms"]);
+    assert.equal(report.boiler.recommendedPowerKw, 24);
   });
 });
 

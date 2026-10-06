@@ -2,7 +2,7 @@ import type { CalculationStatus, HeatingInput, HeatingReport } from "./types.js"
 
 export const LOCAL_ORGANIZATION_ID = "org-local";
 
-export type ParameterSource = "client" | "engineer" | "project_document" | "calculation";
+export type ParameterSource = "" | "client" | "engineer" | "project_document" | "calculation";
 export type ParameterVerificationStatus =
   | "unverified"
   | "confirmed"

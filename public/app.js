@@ -35,6 +35,7 @@ const statusLabels = {
 };
 
 const sourceLabels = {
+  "": "Не указан",
   client: "Клиент",
   engineer: "Инженер",
   project_document: "Проектная документация",
@@ -62,27 +63,36 @@ function nullableValue(name) {
 }
 
 function numberValue(element) {
-  return Number(element.value);
+  return element.value.trim() === "" ? null : Number(element.value);
+}
+
+function booleanValue(element) {
+  return element.value === "" ? null : element.value === "true";
 }
 
 function updateRoomNumbers() {
   const cards = [...roomsContainer.querySelectorAll(".room-card")];
   cards.forEach((card, index) => {
     card.querySelector(".room-number").textContent = String(index + 1);
-    card.querySelector(".remove-room").disabled = cards.length === 1;
+    card.querySelector(".remove-room").disabled = false;
   });
 }
 
 function addRoom(initial = {}) {
   const fragment = roomTemplate.content.cloneNode(true);
   const card = fragment.querySelector(".room-card");
-  card.dataset.roomId = initial.id ?? `room-${nextRoomId++}`;
+  let roomId = initial.id;
+  if (!roomId) {
+    do { roomId = `room-${nextRoomId++}`; }
+    while ([...roomsContainer.children].some((room) => room.dataset.roomId === roomId));
+  }
+  card.dataset.roomId = roomId;
   for (const [field, value] of Object.entries(initial)) {
     if (field === "id") continue;
     const control = card.querySelector(`[data-field="${field}"]`);
     if (!control) continue;
     if (control.type === "checkbox") control.checked = Boolean(value);
-    else control.value = String(value);
+    else control.value = value === null ? "" : String(value);
   }
   card.querySelector(".remove-room").addEventListener("click", () => {
     card.remove();
@@ -95,12 +105,7 @@ function addRoom(initial = {}) {
 function resetRooms(rooms = []) {
   roomsContainer.replaceChildren();
   nextRoomId = 1;
-  if (rooms.length === 0) {
-    addRoom({ name: "Гостиная", areaM2: 30, floorHeatingAreaM2: 25 });
-    addRoom({ name: "Спальня", areaM2: 18, floorHeatingAreaM2: 15 });
-  } else {
-    rooms.forEach((room) => addRoom(room));
-  }
+  rooms.forEach((room) => addRoom(room));
 }
 
 function collectCard() {
@@ -125,7 +130,7 @@ function collectInput() {
     const get = (field) => card.querySelector(`[data-field="${field}"]`);
     const areaM2 = numberValue(get("areaM2"));
     const floorHeatingAreaM2 = numberValue(get("floorHeatingAreaM2"));
-    if (floorHeatingAreaM2 > areaM2) {
+    if (floorHeatingAreaM2 !== null && areaM2 !== null && floorHeatingAreaM2 > areaM2) {
       throw new Error(`В помещении «${get("name").value}» площадь тёплого пола больше площади помещения.`);
     }
     return {
@@ -133,24 +138,24 @@ function collectInput() {
       name: get("name").value.trim(),
       areaM2,
       ceilingHeightM: numberValue(get("ceilingHeightM")),
-      hasStandardWindows: get("hasStandardWindows").checked,
-      hasPanoramicWindows: get("hasPanoramicWindows").checked,
+      hasStandardWindows: booleanValue(get("hasStandardWindows")),
+      hasPanoramicWindows: booleanValue(get("hasPanoramicWindows")),
       floorHeatingAreaM2,
-      hasRadiator: get("hasRadiator").checked,
+      hasRadiator: booleanValue(get("hasRadiator")),
     };
   });
   const electricPower = String(data.get("availableElectricPowerKw") ?? "").trim();
   const circuitLength = String(data.get("circuitLengthM") ?? "").trim();
   return {
-    houseAreaM2: Number(data.get("houseAreaM2")),
+    houseAreaM2: numberValue(formControl("houseAreaM2")),
     rooms,
     heatSource: data.get("heatSource"),
     availableElectricPowerKw: electricPower === "" ? null : Number(electricPower),
-    residents: Number(data.get("residents")),
-    baths: Number(data.get("baths")),
-    showers: Number(data.get("showers")),
-    includeIndirectWaterHeater: data.has("includeIndirectWaterHeater"),
-    ...(circuitLength === "" ? {} : { circuitLengthM: Number(circuitLength) }),
+    residents: numberValue(formControl("residents")),
+    baths: numberValue(formControl("baths")),
+    showers: numberValue(formControl("showers")),
+    includeIndirectWaterHeater: booleanValue(formControl("includeIndirectWaterHeater")),
+    circuitLengthM: circuitLength === "" ? null : Number(circuitLength),
   };
 }
 
@@ -209,10 +214,32 @@ function renderParameters(parameters) {
   `;
 }
 
+function formatAmount(value, unit = "") {
+  return value === null || value === undefined ? "Нет данных" : `${Number(value).toLocaleString("ru-RU")}${unit}`;
+}
+
+function missingList(block) {
+  const labels = {
+    rooms: "помещения", houseAreaM2: "площадь дома", heatSource: "источник тепла",
+    availableElectricPowerKw: "доступная электрическая мощность",
+    includeIndirectWaterHeater: "нужен ли бойлер", residents: "число жильцов", baths: "число ванн",
+    circuitLengthM: "длина контура",
+    showers: "число душей", floorHeatingAreaM2: "площадь ТП", hasRadiator: "наличие радиатора",
+    areaM2: "площадь помещения", ceilingHeightM: "высота потолка",
+    hasStandardWindows: "обычные окна", hasPanoramicWindows: "панорамные окна",
+  };
+  const missing = block.missingParameters ?? [];
+  if (missing.length === 0) return "";
+  return `<p>Не хватает: ${missing.map((path) => {
+    const match = path.match(/^rooms\[(\d+)\]\.(.+)$/);
+    return escapeHtml(match ? `помещение ${Number(match[1]) + 1}: ${labels[match[2]] ?? match[2]}` : labels[path] ?? path);
+  }).join("; ")}.</p>`;
+}
+
 function renderReport(report, parameters = [], savedMessage = "") {
   const radiatorItems = report.radiators.length === 0
-    ? "<li>Радиаторы не указаны.</li>"
-    : report.radiators.map((radiator) => `<li><strong>${escapeHtml(radiator.roomName)}</strong>: ${radiator.requiredPowerW === null ? "проверяет инженер" : `${radiator.requiredPowerW} Вт`}</li>`).join("");
+    ? `<li>${report.input.rooms.length === 0 ? "Нет данных о помещениях." : "Радиаторы не нужны."}</li>`
+    : report.radiators.map((radiator) => `<li><strong>${escapeHtml(radiator.roomName)}</strong>: ${radiator.requiredPowerW === null ? escapeHtml(statusLabels[radiator.status]) : `${radiator.requiredPowerW} Вт`}${missingList(radiator)}</li>`).join("");
   const messages = [...report.warnings, ...report.errors];
   const messageBlock = messages.length === 0
     ? ""
@@ -221,19 +248,35 @@ function renderReport(report, parameters = [], savedMessage = "") {
     ${savedMessage === "" ? "" : `<p class="success-box">${escapeHtml(savedMessage)}</p>`}
     <div class="result-heading"><div><p class="eyebrow">Результат</p><h2>Расчёт отопления</h2></div><span class="status ${statusClass(report.status)}">${escapeHtml(statusLabels[report.status] ?? report.status)}</span></div>
     <div class="result-grid">
-      <div class="metric"><span>Труба ТП</span><strong>${report.floorHeating.pipeLengthM} м</strong></div>
-      <div class="metric"><span>Контуры</span><strong>${report.floorHeating.circuitCount}</strong></div>
-      <div class="metric"><span>Коллекторы</span><strong>${report.floorHeating.collectors.join(" + ") || "—"}</strong></div>
-      <div class="metric"><span>Котёл</span><strong>${report.boiler.recommendedPowerKw === null ? "Проверка" : `${report.boiler.recommendedPowerKw} кВт`}</strong></div>
-      <div class="metric"><span>Монтаж ТП</span><strong>${report.floorHeating.installationCostRub.toLocaleString("ru-RU")} ₽</strong></div>
-      <div class="metric"><span>Утеплитель</span><strong>${report.floorHeating.insulationInstallationCostRub.toLocaleString("ru-RU")} ₽</strong></div>
+      <div class="metric"><span>Труба ТП</span><strong>${formatAmount(report.floorHeating.pipeLengthM, " м")}</strong></div>
+      <div class="metric"><span>Контуры</span><strong>${formatAmount(report.floorHeating.circuitCount)}</strong></div>
+      <div class="metric"><span>Коллекторы</span><strong>${report.floorHeating.circuitCount === null ? "Нет данных" : report.floorHeating.collectors.join(" + ") || "—"}</strong></div>
+      <div class="metric"><span>Котёл</span><strong>${report.boiler.recommendedPowerKw === null ? (report.boiler.status === "impossible" ? "Нет данных" : "Проверка") : `${report.boiler.recommendedPowerKw} кВт`}</strong></div>
+      <div class="metric"><span>Работы: монтаж ТП</span><strong>${formatAmount(report.floorHeating.installationCostRub, " ₽")}</strong></div>
+      <div class="metric"><span>Работы: укладка утеплителя</span><strong>${formatAmount(report.floorHeating.insulationInstallationCostRub, " ₽")}</strong></div>
     </div>
+    <div class="result-block"><h3>Тёплый пол — ${escapeHtml(statusLabels[report.floorHeating.status])}</h3>${missingList(report.floorHeating)}<p>Смесительные узлы: ${formatAmount(report.floorHeating.mixingUnitCount)}</p></div>
+    <div class="result-block"><h3>Стоимость известных работ</h3><p>Выше указаны только монтаж ТП и укладка утеплителя. Цены материалов не заданы; это не полная стоимость отопления и не бесплатные материалы.</p></div>
     <div class="result-block"><h3>Радиаторы</h3><ul>${radiatorItems}</ul></div>
-    <div class="result-block"><h3>Котельная</h3><p>${escapeHtml(report.boilerRoom.note)}</p></div>
+    <div class="result-block"><h3>Котёл — ${escapeHtml(statusLabels[report.boiler.status])}</h3><p>${escapeHtml(report.boiler.note)}</p>${missingList(report.boiler)}</div>
+    <div class="result-block"><h3>Бойлер — ${escapeHtml(statusLabels[report.waterHeater.status])}</h3><p>${escapeHtml(report.waterHeater.note)}</p><p>Объём: ${report.input.includeIndirectWaterHeater === false ? "Не нужен" : formatAmount(report.waterHeater.recommendedVolumeL, " л")}</p>${missingList(report.waterHeater)}</div>
+    <div class="result-block"><h3>Котельная — ${escapeHtml(statusLabels[report.boilerRoom.status])}</h3><p>${escapeHtml(report.boilerRoom.note)}</p>${missingList(report.boilerRoom)}</div>
+    <details><summary>Применённые правила</summary><ul>${report.appliedRules.map((rule) => `<li>${escapeHtml(rule.code)} — ${escapeHtml(rule.description)}</li>`).join("")}</ul></details>
     ${messageBlock}
     ${renderParameters(parameters)}
     <details><summary>Полный JSON-отчёт</summary><pre>${escapeHtml(JSON.stringify(report, null, 2))}</pre></details>
+    <div class="submit-actions"><button type="button" class="secondary" id="export-input">Скачать исходные данные JSON</button><button type="button" class="secondary" id="export-report">Скачать отчёт JSON</button></div>
   `;
+  const download = (value, filename) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2) + "\n"], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  resultElement.querySelector("#export-input").addEventListener("click", () => download(report.input, "heating-input.json"));
+  resultElement.querySelector("#export-report").addEventListener("click", () => download(report, "heating-report.json"));
   resultElement.hidden = false;
   resultElement.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -288,7 +331,7 @@ function populateInput(input) {
   setValue("residents", input.residents);
   setValue("baths", input.baths);
   setValue("showers", input.showers);
-  formControl("includeIndirectWaterHeater").checked = input.includeIndirectWaterHeater;
+  setValue("includeIndirectWaterHeater", input.includeIndirectWaterHeater);
   resetRooms(input.rooms);
 }
 
