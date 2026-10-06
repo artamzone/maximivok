@@ -1,0 +1,21 @@
+{
+  "name": "ivok-heating-calculator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Детерминированный прототип расчёта отопления ИВОК (TASK-01)",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/test/**/*.test.js",
+    "calculate": "npm run build --silent && node dist/src/cli.js",
+    "web": "npm run build --silent && node dist/src/web.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

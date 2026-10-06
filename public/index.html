@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Расчёт отопления ИВОК</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">ИВОК · TASK-01</p>
+        <h1>Предварительный расчёт отопления</h1>
+        <p class="intro">Заполните параметры дома и помещений. Неизвестные случаи будут переданы инженеру.</p>
+      </div>
+    </header>
+
+    <main>
+      <form id="heating-form">
+        <section class="panel">
+          <div class="section-heading">
+            <div><span class="step">01</span><h2>Дом</h2></div>
+          </div>
+          <div class="fields fields-house">
+            <label>Площадь дома, м²<input name="houseAreaM2" type="number" min="0.01" step="0.01" value="120" required /></label>
+            <label>Источник отопления
+              <select name="heatSource">
+                <option value="gas">Газовый котёл</option>
+                <option value="electric">Электрокотёл</option>
+                <option value="solid_fuel">Твердотопливный котёл</option>
+                <option value="pellet">Пеллетный котёл</option>
+                <option value="unknown">Не определён</option>
+              </select>
+            </label>
+            <label>Доступная электромощность, кВт<input name="availableElectricPowerKw" type="number" min="0" step="0.1" placeholder="Не указана" /></label>
+            <label>Длина контура, м<input name="circuitLengthM" type="number" min="0.01" step="0.01" value="80" /></label>
+            <label>Жильцов<input name="residents" type="number" min="0" step="1" value="3" required /></label>
+            <label>Ванн<input name="baths" type="number" min="0" step="1" value="0" required /></label>
+            <label>Душей<input name="showers" type="number" min="0" step="1" value="1" required /></label>
+            <label class="check-field"><input name="includeIndirectWaterHeater" type="checkbox" checked /><span>Нужен бойлер косвенного нагрева</span></label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div><span class="step">02</span><h2>Помещения</h2></div>
+            <button class="secondary" id="add-room" type="button">+ Добавить помещение</button>
+          </div>
+          <div id="rooms" class="rooms"></div>
+        </section>
+
+        <div class="submit-row">
+          <p>Расчёт предварительный и не заменяет проверку инженера.</p>
+          <button class="primary" type="submit">Рассчитать отопление</button>
+        </div>
+      </form>
+
+      <section id="result" class="panel result" hidden aria-live="polite"></section>
+    </main>
+
+    <template id="room-template">
+      <article class="room-card">
+        <div class="room-title"><h3>Помещение <span class="room-number"></span></h3><button class="remove-room" type="button">Удалить</button></div>
+        <div class="fields">
+          <label>Название<input data-field="name" type="text" value="Комната" required /></label>
+          <label>Площадь, м²<input data-field="areaM2" type="number" min="0.01" step="0.01" value="20" required /></label>
+          <label>Высота потолка, м<input data-field="ceilingHeightM" type="number" min="0.01" step="0.01" value="2.8" required /></label>
+          <label>Тёплый пол, м²<input data-field="floorHeatingAreaM2" type="number" min="0" step="0.01" value="15" required /></label>
+        </div>
+        <div class="checks">
+          <label><input data-field="hasStandardWindows" type="checkbox" checked /> Обычные окна</label>
+          <label><input data-field="hasPanoramicWindows" type="checkbox" /> Панорамные окна</label>
+          <label><input data-field="hasRadiator" type="checkbox" checked /> Радиатор</label>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

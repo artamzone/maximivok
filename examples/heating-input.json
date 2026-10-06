@@ -1,0 +1,31 @@
+{
+  "houseAreaM2": 120,
+  "rooms": [
+    {
+      "id": "living-room",
+      "name": "Гостиная",
+      "areaM2": 30,
+      "ceilingHeightM": 2.8,
+      "hasStandardWindows": true,
+      "hasPanoramicWindows": false,
+      "floorHeatingAreaM2": 25,
+      "hasRadiator": true
+    },
+    {
+      "id": "bedroom",
+      "name": "Спальня",
+      "areaM2": 18,
+      "ceilingHeightM": 2.8,
+      "hasStandardWindows": true,
+      "hasPanoramicWindows": false,
+      "floorHeatingAreaM2": 15,
+      "hasRadiator": true
+    }
+  ],
+  "heatSource": "gas",
+  "availableElectricPowerKw": null,
+  "residents": 3,
+  "baths": 0,
+  "showers": 1,
+  "includeIndirectWaterHeater": true
+}
