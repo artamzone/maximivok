@@ -21,6 +21,7 @@ const emptyBox = document.querySelector("#catalog-empty");
 const pageLabel = document.querySelector("#catalog-page");
 const previous = document.querySelector("#catalog-previous");
 const next = document.querySelector("#catalog-next");
+const latestImport = document.querySelector("#catalog-latest-import");
 const money = new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 20 });
 let filters = { query: "", category: "" };
 let currentPage = 1;
@@ -113,6 +114,15 @@ async function loadCatalog(page) {
     renderCategories(data.categories, requestedFilters.category);
     list.replaceChildren(...data.products.map(renderProduct));
     currentPage = data.page;
+    if (data.latestImportAt) {
+      const date = new Date(data.latestImportAt);
+      latestImport.textContent = Number.isNaN(date.getTime())
+        ? "Дата последней выгрузки не указана."
+        : `База обновлена: ${date.toLocaleString("ru-RU")}`;
+      latestImport.hidden = false;
+    } else {
+      latestImport.hidden = true;
+    }
     status.textContent = `Найдено: ${data.total} из ${data.catalogTotal}`;
     pageLabel.textContent = `Страница ${data.page}`;
     previous.disabled = data.page <= 1;
@@ -127,6 +137,7 @@ async function loadCatalog(page) {
     if (id !== requestId || error.name === "AbortError") return;
     status.textContent = "Каталог не загружен.";
     pageLabel.textContent = "—";
+    latestImport.hidden = true;
     errorBox.textContent = "Не удалось загрузить каталог. Проверьте соединение с локальным сервером и нажмите «Найти» для повтора.";
     errorBox.hidden = false;
   } finally {

@@ -10,6 +10,8 @@ import { createWebServer } from "../src/server.js";
 import { SqliteProjectRepository } from "../src/storage.js";
 import { calculateHeating } from "../src/calculator.js";
 import { parseHeatingInput } from "../src/validation.js";
+import { workDefinitions, defaultMarkupPercent, ivokPriceRub } from "../src/works-data.js";
+import { lineTotalKopecks } from "../src/money.js";
 
 async function withWorks(run: (url: string, path: string) => Promise<void>) {
   const dir = await mkdtemp(join(tmpdir(), "ivok-works-"));
@@ -33,26 +35,41 @@ test("сохранение цен атомарно, устаревшая вкл�
   await withWorks(async (url) => {
     const initial = await (await fetch(`${url}/api/works`)).json();
     const prices = initial.items.map((x: { id: string; priceRub: number }) => ({ id: x.id, priceRub: x.priceRub + 0.25 }));
-    const draft = { baseRevision: 0, prices };
+    const draft = { baseRevision: 0, markupPercent: 45, prices };
     const saved = await send(`${url}/api/works`, draft, "PUT");
     assert.equal(saved.status, 200);
     const current = await saved.json();
     assert.equal(current.revision, 1);
-    assert.equal(current.items[0].priceRub, 900.25);
+    assert.equal(current.items[0].priceRub, 12000.25);
+    assert.equal(current.items[0].ivokPriceRub, 17400.3625);
+    assert.equal(current.markupPercent, 45);
     assert.equal((await send(`${url}/api/works`, draft, "PUT")).status, 409);
     for (const bad of [
-      { baseRevision: 1, prices: [] },
-      { baseRevision: 1, prices: prices.map((p: unknown) => ({ ...(p as object), priceRub: -1 })) },
-      { baseRevision: 1, prices: prices.map((p: unknown) => ({ ...(p as object), priceRub: 1.001 })) },
-      { baseRevision: 1, prices: prices.map((p: unknown) => ({ ...(p as object), priceRub: null })) },
-      { baseRevision: 1, prices: [prices[0], prices[0], ...prices.slice(2)] },
-      { baseRevision: 1, prices, name: "Не менять имена" },
-      { baseRevision: 1, prices: prices.map((p: unknown) => ({ ...(p as object), id: "unknown" })) },
-      { baseRevision: 1, prices: prices.map((p: unknown) => ({ ...(p as object), priceRub: "123" })) },
-      { baseRevision: 1, prices: prices.map((p: unknown) => ({ ...(p as object), priceRub: 1e20 })) },
+      { baseRevision: 1, markupPercent: 45, prices: [] },
+      { baseRevision: 1, markupPercent: 45, prices: prices.map((p: unknown) => ({ ...(p as object), priceRub: -1 })) },
+      { baseRevision: 1, markupPercent: 45, prices: prices.map((p: unknown) => ({ ...(p as object), priceRub: 1.001 })) },
+      { baseRevision: 1, markupPercent: 45, prices: prices.map((p: unknown) => ({ ...(p as object), priceRub: null })) },
+      { baseRevision: 1, markupPercent: 45, prices: [prices[0], prices[0], ...prices.slice(2)] },
+      { baseRevision: 1, markupPercent: 45, prices, name: "Не менять имена" },
+      { baseRevision: 1, markupPercent: 45, prices: prices.map((p: unknown) => ({ ...(p as object), id: "unknown" })) },
+      { baseRevision: 1, markupPercent: 45, prices: prices.map((p: unknown) => ({ ...(p as object), priceRub: "123" })) },
+      { baseRevision: 1, markupPercent: 45, prices: prices.map((p: unknown) => ({ ...(p as object), priceRub: 1e20 })) },
+      { baseRevision: 1, markupPercent: -1, prices },
+      { baseRevision: 1, markupPercent: Infinity, prices },
     ]) assert.equal((await send(`${url}/api/works`, bad, "PUT")).status, 400);
     assert.deepEqual(await (await fetch(`${url}/api/works`)).json(), current);
   });
+});
+
+test("смета содержит 35 работ отопления; наценка применяется к итогу строки с округлением вверх", () => {
+  assert.equal(workDefinitions.length, 35);
+  assert.equal(defaultMarkupPercent, 45);
+  assert.equal(ivokPriceRub(12000, 45), 17400);
+  assert.equal(ivokPriceRub(10.01, 45), 14.5145);
+  // 10.01 × 3 × 1.45 = 43.5435; round the line total upward to whole rubles.
+  assert.equal(Math.ceil(lineTotalKopecks(ivokPriceRub(10.01, 45), 3) / 100), 44);
+  assert.equal(workDefinitions.find((item) => item.id === "heating_wall_chasing")?.priceRub, 0);
+  assert.equal(workDefinitions.find((item) => item.id === "heating_wall_chasing")?.name, "Штробление стен");
 });
 
 const heatingInput = {
@@ -71,7 +88,7 @@ test("все новые веб-расчёты используют сохран�
     assert.equal(oldReport.floorHeating.installationCostRub, 2250);
     const initial = await (await fetch(`${url}/api/works`)).json();
     const prices = initial.items.map((x: { id: string; priceRub: number }) => ({ id: x.id, priceRub: x.id === "floor_heating" ? 2.5 : x.id === "insulation" ? 1.25 : x.priceRub }));
-    assert.equal((await send(`${url}/api/works`, { baseRevision: 0, prices }, "PUT")).status, 200);
+    assert.equal((await send(`${url}/api/works`, { baseRevision: 0, markupPercent: 45, prices }, "PUT")).status, 200);
     const preview = await (await send(`${url}/api/calculate`, heatingInput)).json();
     assert.equal(preview.floorHeating.installationCostRub, 6.25);
     assert.equal(preview.floorHeating.insulationInstallationCostRub, 3.13);
@@ -94,10 +111,10 @@ test("цены сохраняются между подключениями, о�
   await withWorks(async (url, path) => {
     const initial = await (await fetch(`${url}/api/works`)).json();
     const prices = initial.items.map((x: { id: string; priceRub: number }) => ({ id: x.id, priceRub: x.priceRub + 1 }));
-    const results = await Promise.all([1, 2].map(() => send(`${url}/api/works`, { baseRevision: 0, prices }, "PUT")));
+    const results = await Promise.all([1, 2].map(() => send(`${url}/api/works`, { baseRevision: 0, markupPercent: 45, prices }, "PUT")));
     assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
     const saved = await (await fetch(`${url}/api/works`)).json();
-    assert.deepEqual(await (await send(`${url}/api/works`, { baseRevision: 1, prices }, "PUT")).json(), saved);
+    assert.deepEqual(await (await send(`${url}/api/works`, { baseRevision: 1, markupPercent: 45, prices }, "PUT")).json(), saved);
     const reopened = new SqliteProjectRepository(path);
     try { assert.deepEqual(reopened.works.getCatalog(), saved); }
     finally { reopened.close(); }
@@ -108,7 +125,7 @@ test("цены сохраняются между подключениями, о�
         .run("foreign", 999, JSON.stringify(prices.map((p: { id: string }) => ({ id: p.id, priceRub: 1 }))), new Date().toISOString());
       assert.deepEqual(await (await fetch(`${url}/api/works`)).json(), saved);
       db.exec("CREATE TRIGGER reject_work_prices BEFORE INSERT ON work_price_versions BEGIN SELECT RAISE(ABORT, 'test failure'); END");
-      const failure = await send(`${url}/api/works`, { baseRevision: 1, prices: prices.map((p: { id: string; priceRub: number }) => ({ ...p, priceRub: p.priceRub + 1 })) }, "PUT");
+      const failure = await send(`${url}/api/works`, { baseRevision: 1, markupPercent: 45, prices: prices.map((p: { id: string; priceRub: number }) => ({ ...p, priceRub: p.priceRub + 1 })) }, "PUT");
       assert.equal(failure.status, 500);
       assert.deepEqual(await (await fetch(`${url}/api/works`)).json(), saved);
     } finally { db.close(); }
@@ -156,8 +173,13 @@ test("справочник содержит пять работ ТЗ; чтени
     assert.equal(response.status, 200);
     const data = await response.json();
     assert.equal(data.revision, 0);
-    assert.deepEqual(data.items.map((x: { priceRub: number }) => x.priceRub), [900, 100, 2900, 2500, 12000]);
-    assert.equal(data.items.length, 5);
+    assert.deepEqual(data.items.slice(0, 2).map((x: { priceRub: number }) => x.priceRub), [12000, 12000]);
+    assert.equal(data.items.length, 35);
+    assert.equal(data.markupPercent, defaultMarkupPercent);
+    assert.equal(data.items.find((x: { id: string }) => x.id === "heating_wall_chasing").priceRub, 0);
+    assert.equal(data.items.find((x: { id: string }) => x.id === "floor_heating").priceRub, 600);
+    assert.equal(data.items.find((x: { id: string }) => x.id === "insulation").priceRub, 100);
+    assert.equal(data.items.find((x: { id: string }) => x.id === "heating_boiler_wall_double").ivokPriceRub, 17400);
     const db = new DatabaseSync(path, { readOnly: true });
     try { assert.equal(db.prepare("SELECT 1 FROM sqlite_master WHERE name='work_price_versions'").get(), undefined); }
     finally { db.close(); }

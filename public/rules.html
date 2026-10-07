@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Правила расчёта · ИВОК</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">ИВОК · TASK-03 · локальный режим</p>
+        <h1>Правила расчёта</h1>
+        <p class="intro">Семь действующих норм для проверки. Только просмотр — значения здесь изменить нельзя.</p>
+        <nav class="page-navigation" aria-label="Разделы приложения"><a href="/" target="_blank" rel="noopener noreferrer">Карточки объектов — в новой вкладке</a> · <a href="/works" target="_blank" rel="noopener noreferrer">Цены работ — в новой вкладке</a></nav>
+      </div>
+    </header>
+    <main class="catalog-workspace rules-workspace">
+      <section class="panel" id="rules-panel" aria-labelledby="rules-heading" aria-busy="true">
+        <h2 id="rules-heading">Действующие нормы</h2>
+        <p class="hint">Значения загружаются из той же конфигурации сервера, которую использует калькулятор. Это текущие правила, а не исторический снимок настроек отдельного отчёта.</p>
+        <p id="rules-message" role="status" aria-live="polite">Загрузка правил…</p>
+        <p id="rules-error" class="error-box" role="alert" hidden></p>
+        <dl id="rules-list" hidden></dl>
+        <button id="rules-retry" type="button" class="secondary" hidden>Повторить загрузку</button>
+        <p class="hint">Просмотр ничего не сохраняет и не пересчитывает. Индивидуальные параметры объекта остаются в его карточке; цены — в справочнике работ. Нестандартные условия по-прежнему требуют проверки инженера.</p>
+      </section>
+    </main>
+    <script type="module" src="/rules.js"></script>
+  </body>
+</html>

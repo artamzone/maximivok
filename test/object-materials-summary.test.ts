@@ -71,15 +71,14 @@ test("сводка закрыта при выборе объекта, показ
   get("object-materials-details").open = true;
   await controller.setObject("a");
   assert.equal(get("object-materials-details").open, false);
-  assert.equal(get("object-materials-summary").textContent, "Добавленные материалы — 3 позиции");
+  assert.equal(get("object-materials-summary").textContent, "Товаров отобрано — 3 позиции");
   assert.equal(get("object-materials-link").textContent, "Перейти в материалы");
   assert.equal(get("object-materials-link").href, "/catalog?objectId=a");
   const content = get("object-materials-content");
   assert.match(content.textContent, /Версия 1/);
-  assert.match(content.textContent, /6,25 ₽/);
+  assert.match(content.textContent, /Цена в каталоге/);
   assert.match(content.textContent, /Цена не указана/);
-  assert.match(content.textContent, /Без цены: 1/);
-  assert.match(content.textContent, /С нулевой ценой: 1/);
+  assert.match(content.textContent, /не входят в КП/);
   assert.match(content.textContent, /<img src=x> Радиатор/);
   function flatten(node: Element): Element[] { return [node, ...node.children.flatMap(flatten)]; }
   assert.equal(flatten(content).some((node) => ["input", "select", "button", "img"].includes(node.tagName)), false);
@@ -96,9 +95,9 @@ test("пустой объект предлагает добавить матер
   let fail = false;
   t.mock.method(globalThis, "fetch", async () => fail ? new Response('{"error":"Ошибка загрузки"}', { status: 500 }) : response(collection("a", 0)));
   await controller.setObject("a");
-  assert.equal(get("object-materials-summary").textContent, "Добавленные материалы — 0 позиций");
+  assert.equal(get("object-materials-summary").textContent, "Товаров отобрано — 0 позиций");
   assert.equal(get("object-materials-link").textContent, "Добавить материалы");
-  assert.match(get("materials-link-hint").textContent, /пока не добавлены/);
+  assert.match(get("materials-link-hint").textContent, /пока не отобраны/);
   fail = true;
   await controller.refresh();
   assert.equal(get("object-materials-error").hidden, false);
@@ -120,7 +119,7 @@ test("пустая сохранённая версия показывает да
   t.mock.method(globalThis, "fetch", async () => response(data));
   await controller.setObject("a");
   assert.match(get("object-materials-content").textContent, /Версия 4/);
-  assert.match(get("object-materials-content").textContent, /0,00 ₽/);
+  assert.match(get("object-materials-content").textContent, /не входят в КП/);
   assert.equal(get("object-materials-link").textContent, "Добавить материалы");
   assert.doesNotMatch(get("object-materials-content").textContent, /Радиатор/);
 });

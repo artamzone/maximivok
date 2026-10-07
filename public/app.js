@@ -81,6 +81,18 @@ function updateRoomNumbers() {
   });
 }
 
+function syncRoomHeight(card) {
+  const inherited = card.querySelector('[data-field="useHouseCeilingHeight"]').checked;
+  const height = card.querySelector('[data-field="ceilingHeightM"]');
+  height.readOnly = inherited;
+  height.placeholder = inherited ? "Из данных дома" : "Индивидуальная высота";
+  if (inherited) height.value = formControl("houseCeilingHeightM").value;
+}
+
+formControl("houseCeilingHeightM").addEventListener("input", () => {
+  roomsContainer.querySelectorAll(".room-card").forEach(syncRoomHeight);
+});
+
 function addRoom(initial = {}) {
   const fragment = roomTemplate.content.cloneNode(true);
   const card = fragment.querySelector(".room-card");
@@ -96,6 +108,30 @@ function addRoom(initial = {}) {
     if (!control) continue;
     if (control.type === "checkbox") control.checked = Boolean(value);
     else control.value = value === null ? "" : String(value);
+  }
+  const inherit = card.querySelector('[data-field="useHouseCeilingHeight"]');
+  inherit.checked = initial.useHouseCeilingHeight ?? (initial.ceilingHeightM == null);
+  inherit.addEventListener("change", () => syncRoomHeight(card));
+  syncRoomHeight(card);
+  for (const [countField, presenceField] of [
+    ["standardWindowCount", "hasStandardWindows"],
+    ["panoramicWindowCount", "hasPanoramicWindows"],
+    ["radiatorCount", "hasRadiator"],
+  ]) {
+    const count = card.querySelector(`[data-field="${countField}"]`);
+    const presence = card.querySelector(`[data-field="${presenceField}"]`);
+    const syncPresence = () => {
+      if (count.value.trim() !== "") presence.value = Number(count.value) > 0 ? "true" : "false";
+    };
+    count.addEventListener("input", () => {
+      if (count.value.trim() === "") presence.value = "";
+      else syncPresence();
+    });
+    presence.addEventListener("change", () => {
+      if (presence.value === "false") count.value = "0";
+      else if (presence.value === "" || numberValue(count) === 0) count.value = "";
+    });
+    syncPresence();
   }
   card.querySelector(".remove-room").addEventListener("click", () => {
     card.remove();
@@ -141,6 +177,10 @@ function collectInput() {
       name: get("name").value.trim(),
       areaM2,
       ceilingHeightM: numberValue(get("ceilingHeightM")),
+      useHouseCeilingHeight: get("useHouseCeilingHeight").checked,
+      standardWindowCount: numberValue(get("standardWindowCount")),
+      panoramicWindowCount: numberValue(get("panoramicWindowCount")),
+      radiatorCount: numberValue(get("radiatorCount")),
       hasStandardWindows: booleanValue(get("hasStandardWindows")),
       hasPanoramicWindows: booleanValue(get("hasPanoramicWindows")),
       floorHeatingAreaM2,
@@ -151,6 +191,7 @@ function collectInput() {
   const circuitLength = String(data.get("circuitLengthM") ?? "").trim();
   return {
     houseAreaM2: numberValue(formControl("houseAreaM2")),
+    houseCeilingHeightM: numberValue(formControl("houseCeilingHeightM")),
     rooms,
     heatSource: data.get("heatSource"),
     availableElectricPowerKw: electricPower === "" ? null : Number(electricPower),
@@ -229,6 +270,7 @@ function missingList(block) {
     circuitLengthM: "длина контура",
     showers: "число душей", floorHeatingAreaM2: "площадь ТП", hasRadiator: "наличие радиатора",
     areaM2: "площадь помещения", ceilingHeightM: "высота потолка",
+    houseCeilingHeightM: "высота потолков дома",
     hasStandardWindows: "обычные окна", hasPanoramicWindows: "панорамные окна",
   };
   const missing = block.missingParameters ?? [];
@@ -242,7 +284,7 @@ function missingList(block) {
 function renderReport(report, parameters = [], savedMessage = "") {
   const radiatorItems = report.radiators.length === 0
     ? `<li>${report.input.rooms.length === 0 ? "Нет данных о помещениях." : "Радиаторы не нужны."}</li>`
-    : report.radiators.map((radiator) => `<li><strong>${escapeHtml(radiator.roomName)}</strong>: ${radiator.requiredPowerW === null ? escapeHtml(statusLabels[radiator.status]) : `${radiator.requiredPowerW} Вт`}${missingList(radiator)}</li>`).join("");
+    : report.radiators.map((radiator) => `<li><strong>${escapeHtml(radiator.roomName)}</strong>: ${radiator.requiredPowerW === null ? escapeHtml(statusLabels[radiator.status]) : `${radiator.requiredPowerW} Вт суммарно для комнаты`} · радиаторов: ${formatAmount(radiator.radiatorCount, " шт.")}${missingList(radiator)}</li>`).join("");
   const messages = [...report.warnings, ...report.errors];
   const messageBlock = messages.length === 0
     ? ""
@@ -259,8 +301,9 @@ function renderReport(report, parameters = [], savedMessage = "") {
       <div class="metric"><span>Работы: укладка утеплителя</span><strong>${formatAmount(report.floorHeating.insulationInstallationCostRub, " ₽")}</strong></div>
     </div>
     <div class="result-block"><h3>Тёплый пол — ${escapeHtml(statusLabels[report.floorHeating.status])}</h3>${missingList(report.floorHeating)}<p>Смесительные узлы: ${formatAmount(report.floorHeating.mixingUnitCount)}</p></div>
-    <div class="result-block"><h3>Стоимость известных работ</h3><p>Выше указаны только монтаж ТП и укладка утеплителя. Сохранённые материалы показаны отдельно в блоке «Добавленные материалы». Это не полная стоимость отопления.</p>${report.workPrices ? `<p>Расценки этого расчёта (версия ${escapeHtml(report.workPrices.revision)}): монтаж ТП — ${formatAmount(report.workPrices.floorHeatingRubPerM2, " ₽/м²")}; утеплитель — ${formatAmount(report.workPrices.insulationRubPerM2, " ₽/м²")}.</p>` : ""}</div>
-    <div class="result-block"><h3>Радиаторы</h3><ul>${radiatorItems}</ul></div>
+    <div class="result-block"><h3>Стоимость известных работ</h3><p>Выше указаны только монтаж ТП и укладка утеплителя. Отобранные товары показаны отдельно в блоке «Товаров отобрано». Стоимость материалов в текущем этапе не входит в КП. Это не полная стоимость отопления.</p>${report.workPrices ? `<p>Расценки этого расчёта (версия ${escapeHtml(report.workPrices.revision)}): монтаж ТП — ${formatAmount(report.workPrices.floorHeatingRubPerM2, " ₽/м²")}; утеплитель — ${formatAmount(report.workPrices.insulationRubPerM2, " ₽/м²")}.</p>` : ""}</div>
+    <div class="result-block"><h3>Параметры помещений</h3><ul>${report.input.rooms.map((room) => `<li><strong>${escapeHtml(room.name)}</strong>: потолок ${formatAmount(room.ceilingHeightM, " м")}${room.useHouseCeilingHeight ? " (из дома)" : ""}; обычных окон ${formatAmount(room.standardWindowCount)}; панорамных окон ${formatAmount(room.panoramicWindowCount)}; радиаторов ${formatAmount(room.radiatorCount)}.</li>`).join("")}</ul></div>
+    <div class="result-block"><h3>Радиаторы</h3><ul>${radiatorItems}</ul><p class="hint">Мощность указана для всей комнаты, не для одного радиатора. Количество сохранено для дальнейшего подбора по паспортной мощности.</p></div>
     <div class="result-block"><h3>Котёл — ${escapeHtml(statusLabels[report.boiler.status])}</h3><p>${escapeHtml(report.boiler.note)}</p>${missingList(report.boiler)}</div>
     <div class="result-block"><h3>Бойлер — ${escapeHtml(statusLabels[report.waterHeater.status])}</h3><p>${escapeHtml(report.waterHeater.note)}</p><p>Объём: ${report.input.includeIndirectWaterHeater === false ? "Не нужен" : formatAmount(report.waterHeater.recommendedVolumeL, " л")}</p>${missingList(report.waterHeater)}</div>
     <div class="result-block"><h3>Котельная — ${escapeHtml(statusLabels[report.boilerRoom.status])}</h3><p>${escapeHtml(report.boilerRoom.note)}</p>${missingList(report.boilerRoom)}</div>
@@ -329,6 +372,7 @@ function setValue(name, value) {
 
 function populateInput(input) {
   setValue("houseAreaM2", input.houseAreaM2);
+  setValue("houseCeilingHeightM", input.houseCeilingHeightM);
   setValue("heatSource", input.heatSource);
   setValue("availableElectricPowerKw", input.availableElectricPowerKw);
   setValue("circuitLengthM", input.circuitLengthM);

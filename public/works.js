@@ -3,11 +3,21 @@ const controls = document.querySelector("#works-controls");
 const list = document.querySelector("#works-list");
 const message = document.querySelector("#works-message");
 const errorBox = document.querySelector("#works-error");
+const markupInput = document.querySelector("#works-markup");
 const reload = document.querySelector("#works-reload");
 let catalog = null;
 let busy = false;
 let dirty = false;
 
+function updateIvokPrices() {
+  if (!catalog) return;
+  const markup = Number(markupInput.value);
+  if (!Number.isFinite(markup) || markup < 0 || markup > 10000) return;
+  for (const input of list.querySelectorAll("input[data-work-id]")) {
+    const item = catalog.items.find((entry) => entry.id === input.dataset.workId);
+    if (item) list.querySelector(`[data-ivok-price="${item.id}"]`).textContent = `${Number(input.value || 0) * (1 + markup / 100)} ₽ / ${item.unit}`;
+  }
+}
 function node(tag, text, className) {
   const element = document.createElement(tag);
   if (text !== undefined) element.textContent = text;
@@ -28,6 +38,7 @@ async function api(options) {
 }
 function render(data) {
   catalog = data;
+  markupInput.value = String(data.markupPercent);
   list.replaceChildren();
   for (const item of data.items) {
     const row = node("div", undefined, "work-row");
@@ -45,8 +56,12 @@ function render(data) {
     input.step = "0.01";
     input.required = true;
     input.value = String(item.priceRub);
-    input.setAttribute("aria-label", `${item.name}: цена, рублей за ${item.unit}`);
-    price.append(node("p", `₽ / ${item.unit}`, "hint"), input);
+    input.addEventListener("input", updateIvokPrices);
+    input.setAttribute("aria-label", `${item.name}: базовая цена, рублей за ${item.unit}`);
+    const ivokPrice = node("output", `${item.ivokPriceRub} ₽ / ${item.unit}`);
+    ivokPrice.dataset.ivokPrice = item.id;
+    price.append(node("p", `Базовая цена, ₽ / ${item.unit}`, "hint"), input,
+      node("p", "Цена ИВОК с наценкой", "hint"), ivokPrice);
     row.append(details, price);
     list.append(row);
   }
@@ -70,20 +85,33 @@ async function load() {
 }
 form.addEventListener("input", () => {
   dirty = true;
+  updateIvokPrices();
+  message.textContent = "Есть несохранённые изменения. Новые расчёты пока используют прежние цены.";
+});
+markupInput.addEventListener("input", () => {
+  dirty = true;
+  updateIvokPrices();
   message.textContent = "Есть несохранённые изменения. Новые расчёты пока используют прежние цены.";
 });
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (busy || catalog === null || !form.reportValidity()) return;
   const prices = [...list.querySelectorAll("input")].map((input) => ({ id: input.dataset.workId, priceRub: Number(input.value) }));
+  const markupPercent = Number(markupInput.value);
+  if (!Number.isFinite(markupPercent) || markupPercent < 0 || markupPercent > 10000) {
+    markupInput.setCustomValidity("Наценка должна быть от 0 до 10000 процентов.");
+    markupInput.reportValidity();
+    return;
+  }
+  markupInput.setCustomValidity("");
   const baseRevision = catalog.revision;
   setBusy(true);
   errorBox.hidden = true;
   message.textContent = "Сохранение цен…";
   try {
-    render(await api({ method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ baseRevision, prices }) }));
+    render(await api({ method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ baseRevision, markupPercent, prices }) }));
     message.textContent = catalog.revision === baseRevision ? "Изменений нет. Цены актуальны."
-      : `Цены сохранены. Версия ${catalog.revision}. Следующий веб-расчёт использует новые расценки; старые отчёты не изменены.`;
+      : `Справочник сохранён. Версия ${catalog.revision}. Новые расчёты отопления используют базовые цены тёплого пола и пеноплекса; старые отчёты не изменены.`;
   } catch (error) { showError(error); }
   finally { setBusy(false); }
 });

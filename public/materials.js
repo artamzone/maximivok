@@ -5,11 +5,6 @@ function node(tag, text, className = "") {
   return result;
 }
 
-function kopecks(value) {
-  const amount = BigInt(value);
-  return `${new Intl.NumberFormat("ru-RU").format(amount / 100n)},${String(amount % 100n).padStart(2, "0")} ₽`;
-}
-
 const priceFormat = new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 20 });
 const priceText = (value) => value === null ? "Цена не указана" : `${priceFormat.format(value)}${value === 0 ? " — требует проверки" : ""}`;
 
@@ -100,13 +95,11 @@ export async function initializeMaterials() {
     historyView.replaceChildren();
     historyView.dataset.versionId = version.id;
     historyView.append(node("h3", `Версия ${version.versionNumber} · ${new Date(version.createdAt).toLocaleString("ru-RU")}`));
-    historyView.append(node("p", `Известная стоимость материалов: ${kopecks(version.knownTotalKopecks)}`, "catalog-price"));
-    historyView.append(node("p", `Без цены: ${version.unpricedCount}. С нулевой ценой: ${version.zeroPriceCount}.`, "hint"));
-    if (version.unpricedCount || version.zeroPriceCount) historyView.append(node("p", "Стоимость неполная или требует проверки инженера. Неизвестная цена не равна нулю.", "warning-list"));
+    historyView.append(node("p", "Цены материалов пока не входят в КП. Это справочный список для будущего расчёта.", "hint"));
     const lines = node("ul", undefined, "materials-snapshot");
     for (const item of version.items) {
       const row = node("li");
-      row.append(node("strong", item.name), node("p", `${item.quantity} ${item.unit} · Цена: ${priceText(item.priceRub)} · Сумма: ${item.lineTotalKopecks === null ? "неизвестна" : kopecks(item.lineTotalKopecks)}`));
+      row.append(node("strong", item.name), node("p", `${item.quantity} ${item.unit} · Цена в каталоге: ${priceText(item.priceRub)}`));
       row.append(node("p", `Артикул: ${item.article ?? "не указан"} · Источник: ${item.source}`, "muted"));
       lines.append(row);
     }
@@ -167,7 +160,7 @@ export async function initializeMaterials() {
       });
       versions.unshift(saved);
       useLatest(saved);
-      message.textContent = `Сохранена версия ${saved.versionNumber}. Известная стоимость: ${kopecks(saved.knownTotalKopecks)}. Без цены: ${saved.unpricedCount}; с нулевой ценой: ${saved.zeroPriceCount}.`;
+      message.textContent = `Сохранена версия ${saved.versionNumber}. Цены пока не входят в КП.`;
     } catch (error) {
       message.textContent = "Сохранение не подтверждено. Черновик оставлен на экране. При потере связи загрузите последнюю версию перед повтором.";
       showError(error);
@@ -229,9 +222,9 @@ export function createObjectMaterialsSummary() {
   }
   function renderVersion(version) {
     const count = version?.items.length ?? 0;
-    summary.textContent = `Добавленные материалы — ${countLabel(count)}`;
+    summary.textContent = `Товаров отобрано — ${countLabel(count)}`;
     link.textContent = count === 0 ? "Добавить материалы" : "Перейти в материалы";
-    hint.textContent = "Материалы пока не добавлены.";
+    hint.textContent = "Товары пока не отобраны.";
     hint.hidden = count > 0;
     if (!version) return;
     content.append(node("p", `Версия ${version.versionNumber} · ${new Date(version.createdAt).toLocaleString("ru-RU")}`, "hint"));
@@ -239,11 +232,11 @@ export function createObjectMaterialsSummary() {
       const wrap = node("div", undefined, "table-wrap object-materials-table");
       wrap.tabIndex = 0;
       wrap.setAttribute("role", "region");
-      wrap.setAttribute("aria-label", "Список сохранённых материалов");
+      wrap.setAttribute("aria-label", "Список сохранённых товаров");
       const table = node("table");
       const head = node("thead");
       const headings = node("tr");
-      for (const label of ["Товар", "Количество", "Ед.", "Цена", "Сумма"]) {
+      for (const label of ["Товар", "Количество", "Ед.", "Цена в каталоге"]) {
         const th = node("th", label);
         th.setAttribute("scope", "col");
         headings.append(th);
@@ -254,20 +247,14 @@ export function createObjectMaterialsSummary() {
         const row = node("tr");
         const name = node("td");
         name.append(node("strong", item.name), node("p", `Артикул: ${item.article ?? "не указан"}`, "muted"));
-        row.append(name, node("td", String(item.quantity)), node("td", item.unit),
-          node("td", priceText(item.priceRub)),
-          node("td", item.lineTotalKopecks === null ? "Неизвестна" : kopecks(item.lineTotalKopecks)));
+        row.append(name, node("td", String(item.quantity)), node("td", item.unit), node("td", priceText(item.priceRub)));
         body.append(row);
       }
       table.append(head, body);
       wrap.append(table);
       content.append(wrap);
     } else content.append(node("p", "В этой сохранённой версии нет товаров.", "muted"));
-    content.append(node("p", `Известная стоимость материалов: ${kopecks(version.knownTotalKopecks)}`, "catalog-price"));
-    if (version.unpricedCount || version.zeroPriceCount) {
-      content.append(node("p", `Без цены: ${version.unpricedCount}. С нулевой ценой: ${version.zeroPriceCount}. Стоимость неполная или требует проверки инженера.`, "warning-list"));
-    }
-    content.append(node("p", "Последняя сохранённая комплектация. Она не привязана к версии расчёта отопления и не является полной стоимостью объекта.", "hint"));
+    content.append(node("p", "Цены материалов пока не входят в КП. Это справочный список для будущего расчёта.", "hint"));
   }
   async function refresh() {
     controller?.abort();
@@ -280,14 +267,14 @@ export function createObjectMaterialsSummary() {
     link.hidden = requestedObject === null;
     if (requestedObject === null) {
       link.href = "/catalog";
-      summary.textContent = "Добавленные материалы — 0 позиций";
+      summary.textContent = "Товаров отобрано — 0 позиций";
       hint.textContent = "Сначала сохраните карточку объекта.";
       panel.setAttribute("aria-busy", "false");
       return;
     }
     link.href = `/catalog?objectId=${encodeURIComponent(requestedObject)}`;
     link.title = "Открыть материалы объекта в новой вкладке";
-    summary.textContent = "Добавленные материалы — загрузка…";
+    summary.textContent = "Товаров отобрано — загрузка…";
     hint.textContent = "Загрузка сохранённых материалов…";
     panel.setAttribute("aria-busy", "true");
     controller = new AbortController();
@@ -299,10 +286,10 @@ export function createObjectMaterialsSummary() {
     } catch (error) {
       if (id !== requestId || requestedObject !== objectId || error.name === "AbortError") return;
       content.replaceChildren();
-      summary.textContent = "Добавленные материалы — не загружены";
+      summary.textContent = "Товары — не загружены";
       link.textContent = "Перейти в материалы";
       hint.hidden = true;
-      errorBox.textContent = "Не удалось загрузить сохранённые материалы. Повторите загрузку или перейдите на страницу материалов.";
+      errorBox.textContent = "Не удалось загрузить сохранённые товары. Повторите загрузку или перейдите на страницу материалов.";
       errorBox.hidden = false;
       retry.hidden = false;
     } finally {

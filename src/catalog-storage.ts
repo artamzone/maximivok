@@ -94,6 +94,8 @@ export interface CatalogPage {
   categories: string[];
   page: number;
   pageSize: number;
+  /** ISO timestamp of the most recent successful catalog import, or null if no import has run yet. */
+  latestImportAt: string | null;
 }
 
 function mapProduct(row: ProductRow): SavedCatalogProduct {
@@ -202,9 +204,16 @@ export class SqliteCatalogRepository {
   public searchProducts(query: CatalogQuery): CatalogPage {
     const result: CatalogPage = {
       products: [], total: 0, catalogTotal: 0, categories: [], page: query.page, pageSize: CATALOG_PAGE_SIZE,
+      latestImportAt: null,
     };
     this.#database.exec("BEGIN");
     try {
+      const hasImports = this.#database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'catalog_imports'").get();
+      if (hasImports) {
+        const row = this.#database.prepare("SELECT MAX(imported_at) AS at FROM catalog_imports WHERE organization_id = ?")
+          .get(LOCAL_ORGANIZATION_ID) as { at: string | null } | undefined;
+        result.latestImportAt = row?.at ?? null;
+      }
       const exists = this.#database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'catalog_products'").get();
       if (exists) {
         const categoryRows = this.#database.prepare(`

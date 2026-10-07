@@ -4,6 +4,7 @@ import process from "node:process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { calculateHeating } from "./calculator.js";
+import { getHeatingRulesView } from "./rules.js";
 import type { ProjectRepository } from "./projects.js";
 import {
   parseCalculationDraft,
@@ -29,6 +30,8 @@ const staticFiles = new Map([
   ["/materials.js", { file: "materials.js", contentType: "text/javascript; charset=utf-8" }],
   ["/works", { file: "works.html", contentType: "text/html; charset=utf-8" }],
   ["/works.js", { file: "works.js", contentType: "text/javascript; charset=utf-8" }],
+  ["/rules", { file: "rules.html", contentType: "text/html; charset=utf-8" }],
+  ["/rules.js", { file: "rules.js", contentType: "text/javascript; charset=utf-8" }],
   ["/styles.css", { file: "styles.css", contentType: "text/css; charset=utf-8" }],
 ]);
 
@@ -113,6 +116,14 @@ async function handleApiRequest(
   pathname: string,
   repository: ProjectRepository,
 ): Promise<boolean> {
+  if (pathname === "/api/rules") {
+    if (request.method === "GET") sendJson(response, 200, getHeatingRulesView());
+    else {
+      response.setHeader("allow", "GET");
+      sendJson(response, 405, { error: "Правила расчёта доступны только для просмотра." });
+    }
+    return true;
+  }
   if (pathname === "/api/works" && (request.method === "GET" || request.method === "PUT")) {
     if (!(repository instanceof SqliteProjectRepository)) sendJson(response, 503, { error: "Справочник работ недоступен без SQLite." });
     else sendJson(response, 200, request.method === "GET" ? repository.works.getCatalog()

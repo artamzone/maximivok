@@ -12,7 +12,7 @@
         <p class="eyebrow">ИВОК · TASK-02 · локальный режим</p>
         <h1>Карточки объектов и расчёты отопления</h1>
         <p class="intro">Сохраняйте данные клиента, объекта и версии расчётов в локальной базе SQLite.</p>
-        <nav class="page-navigation" aria-label="Разделы приложения"><a href="/catalog" target="_blank" rel="noopener noreferrer">Каталог материалов — в новой вкладке</a> · <a href="/works" target="_blank" rel="noopener noreferrer">Справочник работ — в новой вкладке</a></nav>
+        <nav class="page-navigation" aria-label="Разделы приложения"><a href="/catalog" target="_blank" rel="noopener noreferrer">Каталог материалов — в новой вкладке</a> · <a href="/works" target="_blank" rel="noopener noreferrer">Справочник работ — в новой вкладке</a> · <a href="/rules" target="_blank" rel="noopener noreferrer">Правила расчёта — в новой вкладке</a></nav>
       </div>
     </header>
 
@@ -46,13 +46,13 @@
 
           <section class="panel object-materials" id="object-materials-panel" aria-label="Добавленные материалы" aria-busy="false">
             <details id="object-materials-details">
-              <summary id="object-materials-summary">Добавленные материалы — 0 позиций</summary>
+              <summary id="object-materials-summary">Товаров отобрано — 0 позиций</summary>
               <div id="object-materials-content"></div>
             </details>
             <p id="materials-link-hint" class="hint" role="status" aria-live="polite">Сначала сохраните карточку объекта.</p>
             <p id="object-materials-error" class="error-box" role="alert" hidden></p>
             <div class="object-materials-actions">
-              <a id="object-materials-link" class="secondary" href="/catalog" target="_blank" rel="noopener noreferrer" hidden>Добавить материалы</a>
+              <a id="object-materials-link" class="secondary" href="/catalog" target="_blank" rel="noopener noreferrer" hidden>Открыть подбор</a>
               <button id="object-materials-retry" class="secondary" type="button" hidden>Повторить загрузку</button>
             </div>
           </section>
@@ -61,6 +61,7 @@
             <div class="section-heading"><div><span class="step">02</span><h2>Исходные данные</h2></div></div>
             <div class="fields fields-house">
               <label>Площадь дома, м²<input name="houseAreaM2" type="number" min="0.01" step="0.01" placeholder="Неизвестно" /></label>
+              <label>Высота потолков дома, м<input name="houseCeilingHeightM" type="number" min="0.01" step="0.01" placeholder="Неизвестно" /></label>
               <label>Источник отопления
                 <select name="heatSource">
                   <option value="unknown">Не определён</option>
@@ -103,7 +104,7 @@
               <div><span class="step">03</span><h2>Помещения</h2></div>
               <button class="secondary" id="add-room" type="button">+ Добавить помещение</button>
             </div>
-            <p class="hint">Добавьте только реальные помещения. Пустое поле означает «неизвестно»; 0 — подтверждённое отсутствие. Можно рассчитать доступные блоки без полного ввода.</p>
+            <p class="hint">Высота каждой комнаты берётся из дома. Снимите «Как в доме», чтобы задать индивидуальную высоту. Введите количества окон и радиаторов: пустое поле — неизвестно, 0 — отсутствуют. Если известно только наличие, используйте переключатели ниже.</p>
             <div id="rooms" class="rooms"></div>
           </section>
 
@@ -127,8 +128,14 @@
         <div class="fields">
           <label>Название<input data-field="name" type="text" value="Комната" required /></label>
           <label>Площадь, м²<input data-field="areaM2" type="number" min="0.01" step="0.01" placeholder="Неизвестно" /></label>
-          <label>Высота потолка, м<input data-field="ceilingHeightM" type="number" min="0.01" step="0.01" placeholder="Неизвестно" /></label>
+          <div class="room-height">
+            <label>Высота потолка, м<input data-field="ceilingHeightM" type="number" min="0.01" step="0.01" placeholder="Из данных дома" readonly /></label>
+            <label class="check-field"><input data-field="useHouseCeilingHeight" type="checkbox" checked /> Как в доме</label>
+          </div>
           <label>Тёплый пол, м²<input data-field="floorHeatingAreaM2" type="number" min="0" step="0.01" placeholder="Неизвестно" /></label>
+          <label>Обычных окон, шт.<input data-field="standardWindowCount" type="number" min="0" step="1" placeholder="Количество неизвестно" /></label>
+          <label>Панорамных окон, шт.<input data-field="panoramicWindowCount" type="number" min="0" step="1" placeholder="Количество неизвестно" /></label>
+          <label>Радиаторов, шт.<input data-field="radiatorCount" type="number" min="0" step="1" placeholder="Количество неизвестно" /></label>
         </div>
         <div class="checks">
           <label>Обычные окна<select data-field="hasStandardWindows"><option value="">Неизвестно</option><option value="true">Есть</option><option value="false">Нет</option></select></label>

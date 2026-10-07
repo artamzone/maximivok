@@ -7,6 +7,11 @@ export interface RoomInput {
   name: string;
   areaM2: number | null;
   ceilingHeightM: number | null;
+  /** True: effective height is taken from houseCeilingHeightM. Absent in legacy inputs. */
+  useHouseCeilingHeight?: boolean;
+  standardWindowCount?: number | null;
+  panoramicWindowCount?: number | null;
+  radiatorCount?: number | null;
   hasStandardWindows: boolean | null;
   hasPanoramicWindows: boolean | null;
   floorHeatingAreaM2: number | null;
@@ -15,6 +20,7 @@ export interface RoomInput {
 
 export interface HeatingInput {
   houseAreaM2: number | null;
+  houseCeilingHeightM?: number | null;
   rooms: RoomInput[];
   heatSource: HeatSource;
   availableElectricPowerKw: number | null;
@@ -50,6 +56,7 @@ export interface FloorHeatingResult {
 }
 
 export interface RadiatorRoomResult {
+  radiatorCount?: number | null;
   roomId: string;
   roomName: string;
   status: CalculationStatus;

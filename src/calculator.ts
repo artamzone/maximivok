@@ -151,7 +151,8 @@ function calculateRadiators(input: HeatingInput, appliedRules: AppliedRule[]): R
         .map((key) => `rooms[${input.rooms.indexOf(room)}].${key}`);
       if (missingParameters.length > 0) {
         return { roomId: room.id, roomName: room.name, status: "impossible", requiredPowerW: null,
-          reductionPercent: null, warnings: [], missingParameters };
+          reductionPercent: null, warnings: [], missingParameters,
+          ...(room.radiatorCount === undefined ? {} : { radiatorCount: room.radiatorCount }) };
       }
       const warnings: ReportMessage[] = [];
       if (room.hasPanoramicWindows) {
@@ -187,6 +188,7 @@ function calculateRadiators(input: HeatingInput, appliedRules: AppliedRule[]): R
         requiredPowerW,
         reductionPercent,
         warnings,
+        ...(room.radiatorCount === undefined ? {} : { radiatorCount: room.radiatorCount }),
       };
     });
 

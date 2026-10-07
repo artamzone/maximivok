@@ -210,3 +210,11 @@ code { white-space: nowrap; }
   .work-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   #works-controls button, #works-reload { width: 100%; }
 }
+
+.rules-workspace { max-width: 900px; }
+.rule-row { border-bottom: 1px solid var(--line); padding: 16px 0; overflow-wrap: anywhere; }
+.rule-row:last-child { border-bottom: 0; }
+.rule-row dt { font-weight: 750; }
+.rule-row dd { margin: 8px 0 0; }
+.rule-value { color: var(--green-dark); font-size: 1.25rem; }
+#rules-error { overflow-wrap: anywhere; }

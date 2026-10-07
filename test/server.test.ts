@@ -57,7 +57,7 @@ test("GET / открывает веб-форму", async () => {
     const materials = html.match(/<details id="object-materials-details"[^>]*>[\s\S]*?<\/details>/)?.[0];
     assert.ok(materials);
     assert.doesNotMatch(materials.split(">")[0] ?? "", /\bopen\b/);
-    assert.match(materials, /Добавленные материалы/);
+    assert.match(materials, /Товаров отобрано/);
     assert.doesNotMatch(materials, /object-materials-link|<input|<button/);
     assert.match(html, /id="object-materials-link"[^>]*target="_blank"[^>]*hidden/);
   });
@@ -79,7 +79,7 @@ test("форма допускает неизвестные параметры б
     }
     const js = await (await fetch(`${baseUrl}/app.js`)).text();
     assert.match(js, /Стоимость известных работ/);
-    assert.match(js, /Сохранённые материалы показаны отдельно в блоке «Добавленные материалы»/);
+    assert.match(js, /Отобранные товары показаны отдельно в блоке «Товаров отобрано»/);
   });
 });
 

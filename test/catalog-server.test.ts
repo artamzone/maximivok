@@ -105,7 +105,7 @@ test("каталог до импорта пуст, просмотр не соз�
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.deepEqual(await response.json(), {
-      products: [], total: 0, catalogTotal: 0, categories: [], page: 1, pageSize: 50,
+      products: [], total: 0, catalogTotal: 0, categories: [], page: 1, pageSize: 50, latestImportAt: null,
     });
     const database = new DatabaseSync(databasePath, { readOnly: true });
     try {
@@ -166,5 +166,24 @@ test("страницы стабильны и не пересекаются; не
       assert.ok((await response.json()).issues.length > 0);
     }
     assert.equal((await fetch(`${url}/api/catalog`, { method: "POST" })).status, 404);
+  });
+});
+
+test("latestImportAt: null до импорта, ISO-строка после, обновляется при повторном импорте", async () => {
+  await withCatalog(async (url, databasePath) => {
+    const before = await (await fetch(`${url}/api/catalog`)).json();
+    assert.equal(before.latestImportAt, null);
+    const firstRepository = new SqliteCatalogRepository(databasePath);
+    try { firstRepository.saveImport(searchCatalogFixture(), "first.xlsx"); }
+    finally { firstRepository.close(); }
+    const firstAt = (await (await fetch(`${url}/api/catalog`)).json()).latestImportAt;
+    assert.ok(typeof firstAt === "string" && !Number.isNaN(new Date(firstAt).getTime()), firstAt);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const secondRepository = new SqliteCatalogRepository(databasePath);
+    try { secondRepository.saveImport(searchCatalogFixture(), "second.xlsx"); }
+    finally { secondRepository.close(); }
+    const secondAt = (await (await fetch(`${url}/api/catalog`)).json()).latestImportAt;
+    assert.ok(typeof secondAt === "string");
+    assert.ok(new Date(secondAt).getTime() >= new Date(firstAt).getTime());
   });
 });

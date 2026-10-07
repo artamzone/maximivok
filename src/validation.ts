@@ -46,7 +46,7 @@ function requireNumber(
   return value;
 }
 
-function parseRoom(value: unknown, index: number, issues: string[]): RoomInput {
+function parseRoom(value: unknown, index: number, issues: string[], houseCeilingHeightM?: number | null): RoomInput {
   const path = `rooms[${index}]`;
   if (!isRecord(value)) {
     issues.push(`${path}: требуется объект`);
@@ -73,15 +73,50 @@ function parseRoom(value: unknown, index: number, issues: string[]): RoomInput {
     issues.push(`${path}.floorHeatingAreaM2: площадь тёплого пола не может превышать площадь помещения`);
   }
 
+  const individualHeight = requireNumber(value.ceilingHeightM, `${path}.ceilingHeightM`, issues, { min: 0.01 });
+  let useHouseCeilingHeight: boolean | undefined;
+  if (value.useHouseCeilingHeight !== undefined) {
+    if (typeof value.useHouseCeilingHeight !== "boolean") {
+      issues.push(`${path}.useHouseCeilingHeight: требуется true или false`);
+    } else useHouseCeilingHeight = value.useHouseCeilingHeight;
+  } else if (individualHeight === null && houseCeilingHeightM !== undefined) {
+    useHouseCeilingHeight = true;
+  }
+  const counts: Pick<RoomInput, "standardWindowCount" | "panoramicWindowCount" | "radiatorCount"> = {};
+  const presence = {
+    hasStandardWindows: requireBoolean(value.hasStandardWindows, `${path}.hasStandardWindows`, issues),
+    hasPanoramicWindows: requireBoolean(value.hasPanoramicWindows, `${path}.hasPanoramicWindows`, issues),
+    hasRadiator: requireBoolean(value.hasRadiator, `${path}.hasRadiator`, issues),
+  };
+  const pairs = [
+    ["standardWindowCount", "hasStandardWindows"],
+    ["panoramicWindowCount", "hasPanoramicWindows"],
+    ["radiatorCount", "hasRadiator"],
+  ] as const;
+  for (const [countKey, presenceKey] of pairs) {
+    if (value[countKey] === undefined) continue;
+    const count = requireNumber(value[countKey], `${path}.${countKey}`, issues, { min: 0, integer: true });
+    counts[countKey] = count;
+    if (count !== null) {
+      if (!Number.isSafeInteger(count)) issues.push(`${path}.${countKey}: требуется безопасное целое число`);
+      if (presence[presenceKey] !== null && presence[presenceKey] !== (count > 0)) {
+        issues.push(`${path}.${countKey}: количество противоречит признаку ${presenceKey}`);
+      }
+      presence[presenceKey] = count > 0;
+    }
+  }
+
   return {
     id: requireString(value.id, `${path}.id`, issues),
     name: requireString(value.name, `${path}.name`, issues),
     areaM2,
-    ceilingHeightM: requireNumber(value.ceilingHeightM, `${path}.ceilingHeightM`, issues, { min: 0.01 }),
-    hasStandardWindows: requireBoolean(value.hasStandardWindows, `${path}.hasStandardWindows`, issues),
-    hasPanoramicWindows: requireBoolean(value.hasPanoramicWindows, `${path}.hasPanoramicWindows`, issues),
+    ceilingHeightM: useHouseCeilingHeight ? houseCeilingHeightM ?? null : individualHeight,
+    ...(useHouseCeilingHeight === undefined ? {} : { useHouseCeilingHeight }),
+    ...counts,
+    hasStandardWindows: presence.hasStandardWindows,
+    hasPanoramicWindows: presence.hasPanoramicWindows,
     floorHeatingAreaM2,
-    hasRadiator: requireBoolean(value.hasRadiator, `${path}.hasRadiator`, issues),
+    hasRadiator: presence.hasRadiator,
   };
 }
 
@@ -89,10 +124,12 @@ export function parseHeatingInput(value: unknown): HeatingInput {
   const issues: string[] = [];
   if (!isRecord(value)) throw new InputValidationError(["корневое значение должно быть объектом"]);
 
+  const houseCeilingHeightM = value.houseCeilingHeightM === undefined ? undefined
+    : requireNumber(value.houseCeilingHeightM, "houseCeilingHeightM", issues, { min: 0.01 });
   const rooms = value.rooms === undefined || value.rooms === null
     ? []
     : Array.isArray(value.rooms)
-      ? value.rooms.map((room, index) => parseRoom(room, index, issues))
+      ? value.rooms.map((room, index) => parseRoom(room, index, issues, houseCeilingHeightM))
       : (issues.push("rooms: требуется массив помещений"), []);
 
   const heatSource = typeof value.heatSource === "string" && heatSources.has(value.heatSource as HeatSource)
@@ -113,6 +150,7 @@ export function parseHeatingInput(value: unknown): HeatingInput {
 
   const result: HeatingInput = {
     houseAreaM2: requireNumber(value.houseAreaM2, "houseAreaM2", issues, { min: 0.01 }),
+    ...(houseCeilingHeightM === undefined ? {} : { houseCeilingHeightM }),
     rooms,
     heatSource,
     availableElectricPowerKw,
