@@ -52,6 +52,14 @@ test("GET / открывает веб-форму", async () => {
     assert.match(response.headers.get("content-type") ?? "", /text\/html/);
     assert.match(html, /Карточки объектов и расчёты отопления/);
     assert.match(html, /id="heating-form"/);
+    assert.match(html, /«Сохранить карточку» сохраняет только клиента и реквизиты объекта/);
+    assert.match(html, /даже если данные заполнены частично/);
+    const materials = html.match(/<details id="object-materials-details"[^>]*>[\s\S]*?<\/details>/)?.[0];
+    assert.ok(materials);
+    assert.doesNotMatch(materials.split(">")[0] ?? "", /\bopen\b/);
+    assert.match(materials, /Добавленные материалы/);
+    assert.doesNotMatch(materials, /object-materials-link|<input|<button/);
+    assert.match(html, /id="object-materials-link"[^>]*target="_blank"[^>]*hidden/);
   });
 });
 
@@ -71,7 +79,7 @@ test("форма допускает неизвестные параметры б
     }
     const js = await (await fetch(`${baseUrl}/app.js`)).text();
     assert.match(js, /Стоимость известных работ/);
-    assert.match(js, /Цены материалов не заданы/);
+    assert.match(js, /Сохранённые материалы показаны отдельно в блоке «Добавленные материалы»/);
   });
 });
 

@@ -138,3 +138,75 @@ code { white-space: nowrap; }
   .submit-actions { width: 100%; }
   .submit-actions .secondary { width: 100%; }
 }
+
+.page-navigation { margin-top: 18px; }
+.page-navigation a { color: white; text-underline-offset: 4px; }
+.catalog-workspace { display: grid; gap: 18px; width: min(1200px, calc(100% - 32px)); margin: 24px auto 64px; }
+.catalog-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.catalog-filters > label { min-width: 0; }
+.catalog-actions, .catalog-pagination { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.catalog-notice { margin: 18px 0 0; }
+.catalog-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; list-style: none; padding: 0; }
+.catalog-item { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-wrap: anywhere; }
+.catalog-item h3 { font-size: 1rem; line-height: 1.4; }
+.catalog-item a { color: var(--green-dark); text-underline-offset: 3px; }
+.catalog-item p { margin-bottom: 10px; }
+.catalog-item p:last-child { margin-bottom: 0; }
+.catalog-price { font-weight: 750; }
+.catalog-pagination { justify-content: space-between; margin-top: 18px; }
+.catalog-workspace button:disabled { opacity: .5; cursor: default; }
+.catalog-workspace code { white-space: normal; overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  .catalog-workspace { width: calc(100% - 20px); margin-top: 12px; }
+  .catalog-filters, .catalog-list { grid-template-columns: minmax(0, 1fr); }
+  .catalog-actions > button { width: 100%; }
+  .catalog-pagination { gap: 8px; font-size: .85rem; }
+  .catalog-pagination button { padding: 8px 10px; }
+}
+
+#object-materials-link { color: var(--green-dark); }
+#materials-panel[hidden] { display: none; }
+#materials-controls { border: 0; padding: 0; margin: 0; min-width: 0; }
+#materials-error { white-space: pre-line; }
+#materials-object, #materials-message, #materials-version-view { overflow-wrap: anywhere; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.materials-selection, .materials-snapshot { list-style: none; padding: 0; display: grid; gap: 14px; }
+.materials-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 170px) auto; gap: 14px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.materials-info, .materials-row label, .materials-snapshot li { min-width: 0; overflow-wrap: anywhere; }
+.materials-info p { margin: 8px 0 0; }
+.materials-snapshot li { border-bottom: 1px solid var(--line); padding: 10px 0; }
+#materials-history > label { margin: 16px 0; }
+#materials-version-view { margin-top: 16px; }
+
+@media (max-width: 640px) {
+  .materials-row { grid-template-columns: minmax(0, 1fr); }
+  .material-add { width: 100%; }
+}
+
+.object-materials { min-width: 0; }
+.object-materials details { margin-top: 0; }
+.object-materials summary, #object-materials-error { overflow-wrap: anywhere; }
+#object-materials-content { margin-top: 16px; }
+#object-materials-content:empty { display: none; }
+.object-materials-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.object-materials-actions a { border-radius: 9px; padding: 10px 15px; font-weight: 750; text-decoration: none; }
+.object-materials-table { max-width: 100%; max-height: 420px; overflow: auto; }
+.object-materials-table table { min-width: 580px; }
+.object-materials-table td { overflow-wrap: anywhere; }
+.object-materials-table td:first-child { min-width: 180px; }
+.object-materials-table .muted { margin: 6px 0 0; }
+#object-materials-content > .catalog-price { margin-top: 16px; }
+
+.works-workspace { max-width: 900px; }
+#works-controls { border: 0; padding: 0; margin: 0; min-width: 0; }
+#works-error { white-space: pre-line; overflow-wrap: anywhere; }
+#works-reload { margin-top: 14px; }
+.work-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 180px); gap: 16px; align-items: center; border-bottom: 1px solid var(--line); padding: 16px 0; }
+.work-row label { font-weight: 750; }
+.work-row .hint { margin: 6px 0; }
+.work-row input { width: 100%; }
+@media (max-width: 640px) {
+  .work-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  #works-controls button, #works-reload { width: 100%; }
+}

@@ -31,3 +31,12 @@ export const heatingRules = Object.freeze({
     noHeatingEmitters: "NO_HEATING_EMITTERS" as BoilerRoomTemplateCode,
   }),
 });
+
+/** Стартовый справочник из раздела 15 ТЗ; лежак — базовая работа, не погонный метр. */
+export const workDefinitions = [
+  { id: "floor_heating", name: "Монтаж тёплого пола", unit: "м²", priceRub: heatingRules.floorHeating.installationPriceRubPerM2, appliedToHeating: true },
+  { id: "insulation", name: "Укладка утеплителя", unit: "м²", priceRub: heatingRules.floorHeating.insulationPriceRubPerM2, appliedToHeating: true },
+  { id: "water_point", name: "Точка водоснабжения", unit: "точка", priceRub: 2900, appliedToHeating: false },
+  { id: "sewer_point", name: "Канализационная точка", unit: "точка", priceRub: 2500, appliedToHeating: false },
+  { id: "sewer_main", name: "Монтаж лежака (базовая стоимость)", unit: "работа", priceRub: 12000, appliedToHeating: false },
+] as const;

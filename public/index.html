@@ -12,6 +12,7 @@
         <p class="eyebrow">ИВОК · TASK-02 · локальный режим</p>
         <h1>Карточки объектов и расчёты отопления</h1>
         <p class="intro">Сохраняйте данные клиента, объекта и версии расчётов в локальной базе SQLite.</p>
+        <nav class="page-navigation" aria-label="Разделы приложения"><a href="/catalog" target="_blank" rel="noopener noreferrer">Каталог материалов — в новой вкладке</a> · <a href="/works" target="_blank" rel="noopener noreferrer">Справочник работ — в новой вкладке</a></nav>
       </div>
     </header>
 
@@ -40,6 +41,19 @@
               <label class="wide">Адрес объекта *<input name="objectAddress" type="text" maxlength="500" required /></label>
               <label class="wide">Комментарий клиента<textarea name="clientNotes" maxlength="2000" rows="2"></textarea></label>
               <label class="wide">Комментарий по объекту<textarea name="objectNotes" maxlength="2000" rows="2"></textarea></label>
+            </div>
+          </section>
+
+          <section class="panel object-materials" id="object-materials-panel" aria-label="Добавленные материалы" aria-busy="false">
+            <details id="object-materials-details">
+              <summary id="object-materials-summary">Добавленные материалы — 0 позиций</summary>
+              <div id="object-materials-content"></div>
+            </details>
+            <p id="materials-link-hint" class="hint" role="status" aria-live="polite">Сначала сохраните карточку объекта.</p>
+            <p id="object-materials-error" class="error-box" role="alert" hidden></p>
+            <div class="object-materials-actions">
+              <a id="object-materials-link" class="secondary" href="/catalog" target="_blank" rel="noopener noreferrer" hidden>Добавить материалы</a>
+              <button id="object-materials-retry" class="secondary" type="button" hidden>Повторить загрузку</button>
             </div>
           </section>
 
@@ -100,6 +114,7 @@
               <button class="primary" type="submit">Сохранить и рассчитать</button>
             </div>
           </div>
+          <p class="hint">«Сохранить карточку» сохраняет только клиента и реквизиты объекта. Для сохранения параметров отопления и их метаданных нажмите «Сохранить и рассчитать» — даже если данные заполнены частично.</p>
         </form>
 
         <section id="result" class="panel result" hidden aria-live="polite"></section>

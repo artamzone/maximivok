@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Каталог материалов · ИВОК</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">ИВОК · TASK-03 · локальный режим</p>
+        <h1>Каталог материалов</h1>
+        <p class="intro">Товары из выгрузки san-baza.ru. Поиск по названию и артикулу.</p>
+        <nav class="page-navigation" aria-label="Разделы приложения"><a href="/">Карточки и расчёты</a></nav>
+      </div>
+    </header>
+    <main class="catalog-workspace">
+      <section class="panel" id="materials-panel" aria-labelledby="materials-heading" hidden>
+        <h2 id="materials-heading">Материалы объекта</h2>
+        <p id="materials-object"></p>
+        <p class="hint">Выберите товары ниже и введите количество в указанной единице. Совместимость и полноту комплектации проверяет инженер.</p>
+        <p class="warning-list">При каждом сохранении все цены берутся заново из каталога. Показанные в черновике цены могут измениться. Предыдущие версии не переписываются.</p>
+        <p id="materials-message" role="status" aria-live="polite">Загрузка материалов…</p>
+        <p id="materials-error" class="error-box" role="alert" hidden></p>
+        <form id="materials-form">
+          <fieldset id="materials-controls" disabled>
+            <legend class="visually-hidden">Черновик материалов</legend>
+            <p id="materials-empty" class="muted">Товары ещё не выбраны. Добавьте их из каталога ниже.</p>
+            <ul id="materials-selection" class="materials-selection"></ul>
+            <div class="catalog-actions">
+              <button class="primary" id="materials-save" type="submit" disabled>Сохранить материалы</button>
+              <button class="secondary" id="materials-reload" type="button">Загрузить последнюю версию</button>
+            </div>
+          </fieldset>
+        </form>
+        <p class="hint">Суммы рассчитывает сервер при сохранении. Это стоимость выбранных материалов, не полная стоимость отопления и не КП.</p>
+        <details id="materials-history">
+          <summary>Сохранённые версии материалов</summary>
+          <label>Версия для просмотра<select id="materials-version" disabled></select></label>
+          <div id="materials-version-view"><p class="muted">Сохранённых версий пока нет.</p></div>
+        </details>
+      </section>
+      <section class="panel" aria-labelledby="catalog-search-heading">
+        <h2 id="catalog-search-heading">Поиск в каталоге</h2>
+        <form id="catalog-search" role="search">
+          <div class="catalog-filters">
+            <label>Название или артикул
+              <input id="catalog-query" name="query" type="search" maxlength="200" autocomplete="off" placeholder="Введите часть названия или артикула" />
+            </label>
+            <label>Категория
+              <select id="catalog-category" name="category"><option value="">Все категории</option></select>
+            </label>
+          </div>
+          <div class="catalog-actions">
+            <button class="primary" type="submit">Найти</button>
+            <button class="secondary" id="catalog-reset" type="button">Сбросить фильтры</button>
+          </div>
+        </form>
+        <p class="hint catalog-notice">Это справочник, не автоматический подбор оборудования. Выбранные материалы сохраняются отдельно от расчёта отопления. Цена взята из загруженного Excel; актуальность и пригодность товара проверяет инженер.</p>
+      </section>
+      <section class="panel" id="catalog-results" aria-labelledby="catalog-results-heading" aria-busy="true">
+        <h2 id="catalog-results-heading">Материалы</h2>
+        <p id="catalog-status" role="status" aria-live="polite">Загрузка каталога…</p>
+        <p id="catalog-error" class="error-box" role="alert" hidden></p>
+        <p id="catalog-empty" class="muted" hidden></p>
+        <ul id="catalog-list" class="catalog-list"></ul>
+        <nav class="catalog-pagination" aria-label="Страницы каталога">
+          <button class="secondary" id="catalog-previous" type="button" disabled>← Назад</button>
+          <span id="catalog-page">Страница 1</span>
+          <button class="secondary" id="catalog-next" type="button" disabled>Далее →</button>
+        </nav>
+      </section>
+      <p class="hint">Загрузка и обновление каталога пока выполняются командой <code>npm run catalog:import -- san-baza.xlsx</code>. После импорта нажмите «Найти», чтобы обновить список.</p>
+      <noscript><p class="error-box">Для поиска в каталоге включите JavaScript.</p></noscript>
+    </main>
+    <script type="module" src="/catalog.js"></script>
+  </body>
+</html>

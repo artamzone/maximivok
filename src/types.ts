@@ -87,7 +87,15 @@ export interface BoilerRoomResult {
   note: string;
 }
 
+export interface HeatingWorkPrices {
+  readonly revision: number;
+  readonly floorHeatingRubPerM2: number;
+  readonly insulationRubPerM2: number;
+}
+
 export interface HeatingReport {
+  /** Present for web calculations using a versioned work price catalog; absent in legacy reports. */
+  workPrices?: HeatingWorkPrices;
   status: CalculationStatus;
   input: HeatingInput;
   floorHeating: FloorHeatingResult;

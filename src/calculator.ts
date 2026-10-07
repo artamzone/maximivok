@@ -1,4 +1,5 @@
 import { heatingRules } from "./config.js";
+import { lineTotalKopecks } from "./money.js";
 import type {
   AppliedRule,
   BoilerResult,
@@ -7,6 +8,7 @@ import type {
   FloorHeatingResult,
   HeatingInput,
   HeatingReport,
+  HeatingWorkPrices,
   RadiatorRoomResult,
   ReportMessage,
   WaterHeaterResult,
@@ -33,8 +35,17 @@ function calculateFloorHeating(
   appliedRules: AppliedRule[],
   warnings: ReportMessage[],
   errors: ReportMessage[],
+  workPrices?: HeatingWorkPrices,
 ): FloorHeatingResult {
   const config = heatingRules.floorHeating;
+  const installationPrice = workPrices?.floorHeatingRubPerM2 ?? config.installationPriceRubPerM2;
+  const insulationPrice = workPrices?.insulationRubPerM2 ?? config.insulationPriceRubPerM2;
+  const cost = (area: number, price: number) => workPrices === undefined
+    ? round(area * price) : area === 0 ? 0 : lineTotalKopecks(price, area) / 100;
+  const installationRule = rule(workPrices === undefined ? "FH_INSTALLATION_900_RUB_M2" : "FH_INSTALLATION_PRICE",
+    `Монтаж тёплого пола: ${installationPrice} ₽/м².`);
+  const insulationRule = rule(workPrices === undefined ? "FH_INSULATION_100_RUB_M2" : "FH_INSULATION_PRICE",
+    `Укладка утеплителя: ${insulationPrice} ₽/м².`);
   const requestedCircuitLengthM = input.circuitLengthM === undefined
     ? config.standardCircuitLengthM : input.circuitLengthM;
   const missingParameters = input.rooms.flatMap((room, index) =>
@@ -48,18 +59,20 @@ function calculateFloorHeating(
     };
   }
   const areaM2 = round(input.rooms.reduce((sum, room) => sum + (room.floorHeatingAreaM2 ?? 0), 0));
+  const zeroPrice = areaM2 > 0 && (installationPrice === 0 || insulationPrice === 0);
+  if (zeroPrice) warnings.push(warning("WORK_ZERO_PRICE_REVIEW", "Нулевая цена работ требует проверки инженера; итог не означает полную бесплатную стоимость работ."));
   if (requestedCircuitLengthM === null && areaM2 > 0) {
     appliedRules.push(
       rule("FH_PIPE_6M_PER_M2", "На 1 м² тёплого пола принято 6 пог. м трубы."),
-      rule("FH_INSTALLATION_900_RUB_M2", "Монтаж тёплого пола: 900 ₽/м²."),
-      rule("FH_INSULATION_100_RUB_M2", "Укладка утеплителя: 100 ₽/м²."),
+      installationRule,
+      insulationRule,
     );
     return {
       status: "impossible", missingParameters: ["circuitLengthM"], areaM2,
       pipeLengthM: round(areaM2 * config.pipeMetersPerM2), circuitLengthM: null,
       circuitCount: null, averageCircuitLengthM: null, collectors: [], mixingUnitCount: null,
-      installationCostRub: round(areaM2 * config.installationPriceRubPerM2),
-      insulationInstallationCostRub: round(areaM2 * config.insulationPriceRubPerM2),
+      installationCostRub: cost(areaM2, installationPrice),
+      insulationInstallationCostRub: cost(areaM2, insulationPrice),
     };
   }
   if (requestedCircuitLengthM === null) {
@@ -69,7 +82,7 @@ function calculateFloorHeating(
       installationCostRub: 0, insulationInstallationCostRub: 0,
     };
   }
-  let status: CalculationStatus = "calculated";
+  let status: CalculationStatus = zeroPrice ? "requires_engineer_review" : "calculated";
 
   if (requestedCircuitLengthM > config.exceptionalCircuitLengthM) {
     status = "impossible";
@@ -103,8 +116,8 @@ function calculateFloorHeating(
     rule("FH_CIRCUITS_ROUND_UP", "Количество контуров округляется вверх."),
     rule("FH_COLLECTOR_MAX_12", "Один коллектор обслуживает не более 12 контуров."),
     rule("FH_COLLECTORS_BALANCED", "Контуры делятся между коллекторами максимально равномерно."),
-    rule("FH_INSTALLATION_900_RUB_M2", "Монтаж тёплого пола: 900 ₽/м²."),
-    rule("FH_INSULATION_100_RUB_M2", "Укладка утеплителя: 100 ₽/м²."),
+    installationRule,
+    insulationRule,
   );
   if (hasRadiators && collectors.length > 0) {
     appliedRules.push(
@@ -122,8 +135,8 @@ function calculateFloorHeating(
     collectors,
     mixingUnitCount: mixingUnknown ? null : hasRadiators ? collectors.length : 0,
     ...(mixingUnknown ? { missingParameters: unknownRadiators } : {}),
-    installationCostRub: round(areaM2 * config.installationPriceRubPerM2),
-    insulationInstallationCostRub: round(areaM2 * config.insulationPriceRubPerM2),
+    installationCostRub: cost(areaM2, installationPrice),
+    insulationInstallationCostRub: cost(areaM2, insulationPrice),
   };
 }
 
@@ -341,11 +354,11 @@ function combineStatus(statuses: CalculationStatus[]): CalculationStatus {
   return "calculated";
 }
 
-export function calculateHeating(input: HeatingInput): HeatingReport {
+export function calculateHeating(input: HeatingInput, workPrices?: HeatingWorkPrices): HeatingReport {
   const appliedRules: AppliedRule[] = [];
   const warnings: ReportMessage[] = [];
   const errors: ReportMessage[] = [];
-  const floorHeating = calculateFloorHeating(input, appliedRules, warnings, errors);
+  const floorHeating = calculateFloorHeating(input, appliedRules, warnings, errors, workPrices);
   const radiators = calculateRadiators(input, appliedRules);
   const boiler = calculateBoiler(input, appliedRules);
   const waterHeater = calculateWaterHeater(input, appliedRules);
@@ -353,6 +366,7 @@ export function calculateHeating(input: HeatingInput): HeatingReport {
   warnings.push(...radiators.flatMap((radiator) => radiator.warnings));
 
   return {
+    ...(workPrices === undefined ? {} : { workPrices: { ...workPrices } }),
     status: combineStatus([
       floorHeating.status,
       ...radiators.map((radiator) => radiator.status),

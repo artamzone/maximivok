@@ -9,6 +9,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/test/**/*.test.js",
     "calculate": "npm run build --silent && node dist/src/cli.js",
+    "catalog:check": "npm run build --silent && node dist/src/catalog-cli.js",
+    "catalog:import": "npm run build --silent && node dist/src/catalog-storage-cli.js import",
+    "catalog:log": "npm run build --silent && node dist/src/catalog-storage-cli.js log",
     "web": "npm run build --silent && node dist/src/web.js"
   },
   "engines": {
@@ -17,5 +20,8 @@
   "devDependencies": {
     "@types/node": "^24.10.1",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "read-excel-file": "9.3.10"
   }
 }

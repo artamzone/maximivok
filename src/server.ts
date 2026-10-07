@@ -11,6 +11,10 @@ import {
   parseObjectCardDraft,
 } from "./project-validation.js";
 import { SqliteProjectRepository } from "./storage.js";
+import { SqliteCatalogRepository } from "./catalog-storage.js";
+import { parseCatalogQuery } from "./catalog-query.js";
+import { MaterialConflictError, parseMaterialsDraft } from "./materials.js";
+import { parseWorkPriceDraft, WorkPriceConflictError } from "./works.js";
 import { InputValidationError, parseHeatingInput } from "./validation.js";
 
 const publicDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "../../public");
@@ -20,6 +24,11 @@ const defaultDatabasePath = resolve(process.cwd(), "data", "ivok.sqlite");
 const staticFiles = new Map([
   ["/", { file: "index.html", contentType: "text/html; charset=utf-8" }],
   ["/app.js", { file: "app.js", contentType: "text/javascript; charset=utf-8" }],
+  ["/catalog", { file: "catalog.html", contentType: "text/html; charset=utf-8" }],
+  ["/catalog.js", { file: "catalog.js", contentType: "text/javascript; charset=utf-8" }],
+  ["/materials.js", { file: "materials.js", contentType: "text/javascript; charset=utf-8" }],
+  ["/works", { file: "works.html", contentType: "text/html; charset=utf-8" }],
+  ["/works.js", { file: "works.js", contentType: "text/javascript; charset=utf-8" }],
   ["/styles.css", { file: "styles.css", contentType: "text/css; charset=utf-8" }],
 ]);
 
@@ -79,6 +88,10 @@ function objectRoute(pathname: string): { objectId: string; calculations: boolea
 }
 
 function sendRequestError(response: ServerResponse, error: unknown): void {
+  if (error instanceof MaterialConflictError || error instanceof WorkPriceConflictError) {
+    sendJson(response, 409, { error: error.message });
+    return;
+  }
   if (error instanceof RequestTooLargeError) {
     sendJson(response, 413, { error: "Запрос превышает допустимый размер 1 МБ." });
     return;
@@ -100,9 +113,37 @@ async function handleApiRequest(
   pathname: string,
   repository: ProjectRepository,
 ): Promise<boolean> {
+  if (pathname === "/api/works" && (request.method === "GET" || request.method === "PUT")) {
+    if (!(repository instanceof SqliteProjectRepository)) sendJson(response, 503, { error: "Справочник работ недоступен без SQLite." });
+    else sendJson(response, 200, request.method === "GET" ? repository.works.getCatalog()
+      : repository.works.save(parseWorkPriceDraft(await readJsonBody(request))));
+    return true;
+  }
+  const materialRoute = /^\/api\/objects\/([^/]+)\/materials(?:\/([^/]+))?$/.exec(pathname);
+  if (materialRoute?.[1] !== undefined && (request.method === "GET" || (request.method === "POST" && materialRoute[2] === undefined))) {
+    if (!(repository instanceof SqliteProjectRepository)) {
+      sendJson(response, 503, { error: "Хранение материалов недоступно без SQLite." });
+      return true;
+    }
+    let objectId: string;
+    let versionId: string | undefined;
+    try {
+      objectId = decodeURIComponent(materialRoute[1]);
+      versionId = materialRoute[2] === undefined ? undefined : decodeURIComponent(materialRoute[2]);
+    } catch { return false; }
+    const result = request.method === "POST"
+      ? repository.materials.save(objectId, parseMaterialsDraft(await readJsonBody(request)))
+      : versionId === undefined
+        ? repository.materials.getCollection(objectId)
+        : repository.materials.getVersion(objectId, versionId);
+    if (result === null) sendJson(response, 404, { error: "Объект или версия материалов не найдены." });
+    else sendJson(response, request.method === "POST" ? 201 : 200, result);
+    return true;
+  }
+
   if (request.method === "POST" && pathname === "/api/calculate") {
     const input = parseHeatingInput(await readJsonBody(request));
-    sendJson(response, 200, calculateHeating(input));
+    sendJson(response, 200, calculateHeating(input, repository instanceof SqliteProjectRepository ? repository.works.getHeatingPrices() : undefined));
     return true;
   }
 
@@ -113,7 +154,8 @@ async function handleApiRequest(
 
   if (request.method === "POST" && pathname === "/api/objects") {
     const draft = parseCreateObjectDraft(await readJsonBody(request));
-    const report = draft.calculation === null ? null : calculateHeating(draft.calculation.input);
+    const report = draft.calculation === null ? null : calculateHeating(draft.calculation.input,
+      repository instanceof SqliteProjectRepository ? repository.works.getHeatingPrices() : undefined);
     const details = repository.createObject(draft, report);
     sendJson(response, 201, details);
     return true;
@@ -139,7 +181,8 @@ async function handleApiRequest(
 
   if (request.method === "POST" && route.calculations) {
     const draft = parseCalculationDraft(await readJsonBody(request));
-    const calculation = repository.addCalculation(route.objectId, draft, calculateHeating(draft.input));
+    const calculation = repository.addCalculation(route.objectId, draft, calculateHeating(draft.input,
+      repository instanceof SqliteProjectRepository ? repository.works.getHeatingPrices() : undefined));
     if (calculation === null) sendJson(response, 404, { error: "Объект не найден." });
     else sendJson(response, 201, calculation);
     return true;
@@ -152,10 +195,18 @@ async function handleRequest(
   request: IncomingMessage,
   response: ServerResponse,
   repository: ProjectRepository,
+  catalog: SqliteCatalogRepository | null,
 ): Promise<void> {
-  const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+  const url = new URL(request.url ?? "/", "http://localhost");
+  const pathname = url.pathname;
   if (request.method === "GET" && (await serveStatic(pathname, response))) return;
   try {
+    if (request.method === "GET" && pathname === "/api/catalog") {
+      const query = parseCatalogQuery(url.searchParams);
+      if (catalog === null) sendJson(response, 503, { error: "Каталог недоступен без подключения к SQLite." });
+      else sendJson(response, 200, catalog.searchProducts(query));
+      return;
+    }
     if (await handleApiRequest(request, response, pathname, repository)) return;
   } catch (error: unknown) {
     sendRequestError(response, error);
@@ -169,15 +220,25 @@ export function createWebServer(options: WebServerOptions = {}): Server {
     throw new Error("Укажите repository или databasePath, но не оба параметра.");
   }
   const ownsRepository = options.repository === undefined;
-  const repository = options.repository ?? new SqliteProjectRepository(
-    options.databasePath ?? process.env.IVOK_DATABASE_PATH ?? defaultDatabasePath,
-  );
+  const databasePath = options.databasePath ?? process.env.IVOK_DATABASE_PATH ?? defaultDatabasePath;
+  const repository = options.repository ?? new SqliteProjectRepository(databasePath);
+  let catalog: SqliteCatalogRepository | null = null;
+  try {
+    // An injected project repository must not silently open a different, default database.
+    if (ownsRepository) catalog = new SqliteCatalogRepository(databasePath, { readOnly: true });
+  } catch (error: unknown) {
+    if (ownsRepository) repository.close();
+    throw error;
+  }
   const server = createServer((request, response) => {
-    void handleRequest(request, response, repository).catch(() => {
+    void handleRequest(request, response, repository, catalog).catch(() => {
       if (!response.headersSent) sendJson(response, 500, { error: "Не удалось обработать запрос." });
       else response.destroy();
     });
   });
-  if (ownsRepository) server.once("close", () => repository.close());
+  if (ownsRepository) server.once("close", () => {
+    try { catalog?.close(); }
+    finally { repository.close(); }
+  });
   return server;
 }

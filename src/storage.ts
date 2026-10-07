@@ -2,6 +2,8 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
+import { MaterialStore } from "./materials-storage.js";
+import { WorkStore } from "./works-storage.js";
 import type { CalculationStatus, HeatingReport } from "./types.js";
 import {
   LOCAL_ORGANIZATION_ID,
@@ -170,12 +172,16 @@ function mapParameter(row: ParameterRow): SavedParameterMetadata {
 }
 
 export class SqliteProjectRepository implements ProjectRepository {
+  public readonly materials: MaterialStore;
+  public readonly works: WorkStore;
   readonly #database: DatabaseSync;
   #closed = false;
 
   public constructor(databasePath: string) {
     if (databasePath !== ":memory:") mkdirSync(dirname(databasePath), { recursive: true });
     this.#database = new DatabaseSync(databasePath);
+    this.materials = new MaterialStore(this.#database);
+    this.works = new WorkStore(this.#database);
     this.#database.exec(schema);
     this.#database.prepare("INSERT OR IGNORE INTO organizations (id, name) VALUES (?, ?)").run(
       LOCAL_ORGANIZATION_ID,

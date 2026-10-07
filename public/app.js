@@ -1,3 +1,6 @@
+import { createObjectMaterialsSummary } from "./materials.js";
+
+const objectMaterials = createObjectMaterialsSummary();
 const form = document.querySelector("#heating-form");
 const roomsContainer = document.querySelector("#rooms");
 const roomTemplate = document.querySelector("#room-template");
@@ -256,7 +259,7 @@ function renderReport(report, parameters = [], savedMessage = "") {
       <div class="metric"><span>Работы: укладка утеплителя</span><strong>${formatAmount(report.floorHeating.insulationInstallationCostRub, " ₽")}</strong></div>
     </div>
     <div class="result-block"><h3>Тёплый пол — ${escapeHtml(statusLabels[report.floorHeating.status])}</h3>${missingList(report.floorHeating)}<p>Смесительные узлы: ${formatAmount(report.floorHeating.mixingUnitCount)}</p></div>
-    <div class="result-block"><h3>Стоимость известных работ</h3><p>Выше указаны только монтаж ТП и укладка утеплителя. Цены материалов не заданы; это не полная стоимость отопления и не бесплатные материалы.</p></div>
+    <div class="result-block"><h3>Стоимость известных работ</h3><p>Выше указаны только монтаж ТП и укладка утеплителя. Сохранённые материалы показаны отдельно в блоке «Добавленные материалы». Это не полная стоимость отопления.</p>${report.workPrices ? `<p>Расценки этого расчёта (версия ${escapeHtml(report.workPrices.revision)}): монтаж ТП — ${formatAmount(report.workPrices.floorHeatingRubPerM2, " ₽/м²")}; утеплитель — ${formatAmount(report.workPrices.insulationRubPerM2, " ₽/м²")}.</p>` : ""}</div>
     <div class="result-block"><h3>Радиаторы</h3><ul>${radiatorItems}</ul></div>
     <div class="result-block"><h3>Котёл — ${escapeHtml(statusLabels[report.boiler.status])}</h3><p>${escapeHtml(report.boiler.note)}</p>${missingList(report.boiler)}</div>
     <div class="result-block"><h3>Бойлер — ${escapeHtml(statusLabels[report.waterHeater.status])}</h3><p>${escapeHtml(report.waterHeater.note)}</p><p>Объём: ${report.input.includeIndirectWaterHeater === false ? "Не нужен" : formatAmount(report.waterHeater.recommendedVolumeL, " л")}</p>${missingList(report.waterHeater)}</div>
@@ -311,6 +314,7 @@ function renderObjectList(objects) {
 }
 
 async function loadObjects() {
+  void objectMaterials.setObject(activeObjectId);
   try {
     const payload = await api("/api/objects");
     renderObjectList(payload.objects);
@@ -398,9 +402,9 @@ saveCardButton.addEventListener("click", async () => {
         body: JSON.stringify(card),
       });
     }
-    resultElement.innerHTML = '<p class="success-box">Карточка сохранена. Расчёт можно добавить после заполнения исходных данных.</p>';
+    resultElement.innerHTML = '<p class="success-box">Данные клиента и реквизиты объекта сохранены. Изменения параметров отопления не сохранены; для этого нажмите «Сохранить и рассчитать». Ранее сохранённые версии не изменены.</p>';
     resultElement.hidden = false;
-    saveNote.textContent = "Карточка сохранена. Расчётов пока может не быть.";
+    saveNote.textContent = "Карточка сохранена отдельно от параметров отопления.";
     await loadObjects();
   } catch (error) {
     renderError(error instanceof Error ? error.message : "Не удалось сохранить карточку.", error.issues ?? []);
@@ -446,6 +450,12 @@ form.addEventListener("submit", async (event) => {
     submitButton.textContent = "Сохранить и рассчитать";
   }
 });
+
+function refreshMaterialsOnReturn() {
+  if (document.visibilityState === "visible") void objectMaterials.refresh();
+}
+window.addEventListener("focus", refreshMaterialsOnReturn);
+document.addEventListener("visibilitychange", refreshMaterialsOnReturn);
 
 resetRooms();
 void loadObjects();

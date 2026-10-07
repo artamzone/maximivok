@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Справочник работ — ИВОК</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="page-header"><div>
+    <p class="eyebrow">ИВОК · TASK-03 · локальный режим</p>
+    <h1>Справочник работ</h1>
+    <p class="intro">Пять работ из ТЗ. Цены сохраняются отдельно от карточек объектов.</p>
+    <nav class="page-navigation" aria-label="Разделы приложения"><a href="/" target="_blank" rel="noopener noreferrer">Карточки объектов — в новой вкладке</a></nav>
+  </div></header>
+  <main class="catalog-workspace works-workspace">
+    <section class="panel">
+      <h2>Расценки</h2>
+      <p class="hint">После сохранения цены монтажа ТП и утеплителя применяются ко всем новым веб-расчётам. Старые сохранённые отчёты не меняются. В уже открытой карточке нажмите «Сохранить и рассчитать», когда нужен новый расчёт.</p>
+      <p class="hint">Водоснабжение, канализационная точка и лежак пока только в справочнике. Цена лежака — базовая стоимость работы, не стоимость погонного метра.</p>
+      <p id="works-message" role="status" aria-live="polite">Загрузка цен…</p>
+      <p id="works-error" class="error-box" role="alert" hidden></p>
+      <form id="works-form">
+        <fieldset id="works-controls" disabled>
+          <legend class="visually-hidden">Редактируемые цены работ</legend>
+          <div id="works-list"></div>
+          <p class="hint">Цена в рублях, до двух знаков после запятой. Пустая цена недопустима. Нулевая цена требует проверки инженера.</p>
+          <button class="primary" type="submit">Сохранить цены</button>
+        </fieldset>
+      </form>
+      <button id="works-reload" type="button" class="secondary">Загрузить актуальные цены</button>
+    </section>
+  </main>
+  <script type="module" src="/works.js"></script>
+</body>
+</html>
