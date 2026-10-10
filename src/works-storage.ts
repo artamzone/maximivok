@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { HeatingWorkPrices } from "./types.js";
+import type { HeatingWorkPrices, PlumbingWorkPrices, SewageWorkPrices } from "./types.js";
 import { calculateHeatingWorkPrices, defaultMarkupPercent, ivokPriceRub, workDefinitions } from "./works-data.js";
 import { LOCAL_ORGANIZATION_ID } from "./projects.js";
 import { parseWorkPriceDraft, WorkPriceConflictError, type WorkPriceDraft } from "./works.js";
@@ -46,6 +46,43 @@ export class WorkStore {
   public getHeatingPrices(): HeatingWorkPrices {
     const catalog = this.getCatalog();
     return calculateHeatingWorkPrices(catalog.revision, Object.fromEntries(catalog.items.map((item) => [item.id, item.priceRub])));
+  }
+
+  public getPlumbingPrices(): PlumbingWorkPrices {
+    const catalog = this.getCatalog();
+    const price = (id: string): number => {
+      const item = catalog.items.find((row) => row.id === id);
+      if (item === undefined) {
+        throw new Error(`В справочнике работ нет позиции ${id}`);
+      }
+      return item.priceRub;
+    };
+    return {
+      revision: catalog.revision,
+      waterHotPointRub: price("heating_water_point"),
+      recirculationPerMeterRub: price("plumbing_recirculation"),
+      trapInstallRub: price("plumbing_trap_install"),
+      markupPercent: catalog.markupPercent,
+    };
+  }
+
+  public getSewagePrices(): SewageWorkPrices {
+    const catalog = this.getCatalog();
+    const price = (id: string): number => {
+      const item = catalog.items.find((row) => row.id === id);
+      if (item === undefined) {
+        throw new Error(`В справочнике работ нет позиции ${id}`);
+      }
+      return item.priceRub;
+    };
+    return {
+      revision: catalog.revision,
+      sewagePoint50Rub: price("sewage_point_50"),
+      sewagePoint110Rub: price("sewage_point_110"),
+      sewerMainPerMeterRub: price("sewer_main"),
+      standpipeRub: price("sewage_standpipe"),
+      markupPercent: catalog.markupPercent,
+    };
   }
 
   public getCatalog(): WorkCatalog {

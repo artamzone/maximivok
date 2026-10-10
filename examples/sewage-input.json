@@ -1,0 +1,36 @@
+{
+  "sewer": {
+    "trapCount": 1,
+    "alreadyExecuted": [],
+    "sewerMains": [
+      {
+        "id": "main1",
+        "fromRoomIds": ["bath", "kitchen"],
+        "lengthM": 7,
+        "alreadyExecuted": false
+      }
+    ]
+  },
+  "plumbing": {
+    "rooms": [
+      {
+        "roomId": "bath",
+        "fixtures": [
+          { "type": "bath", "count": 1 },
+          { "type": "sink", "count": 1 },
+          { "type": "toilet", "count": 1 }
+        ],
+        "hasRecirculation": false
+      },
+      {
+        "roomId": "kitchen",
+        "fixtures": [
+          { "type": "kitchen_sink", "count": 1 },
+          { "type": "dishwasher", "count": 1 }
+        ],
+        "hasRecirculation": false
+      }
+    ],
+    "hotWaterSource": "two_loop_boiler"
+  }
+}

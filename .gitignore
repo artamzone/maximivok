@@ -5,3 +5,7 @@ dist/
 .env.*
 !.env.example
 data/
+AGENTS.md
+Task.md
+FromMax/
+tz.txt

@@ -13,6 +13,12 @@
 - Для сложной работы составьте короткий план и отмечайте прогресс. Для простой правки не создавайте лишние документы.
 - Перед изменением общего модуля проверьте его потребителей, совместимость и покрытие тестами.
 
+## Связь с пользователем
+
+- Объяснять сложные решения и задавать уточняющие вопросы простым языком, избегая профессионального жаргона без объяснений.
+- Пользователь не всегда знает техническую терминологию: если термин может быть непонятен, кратко пояснять его смысл.
+- Не перегружать сообщения деталями, которые не нужны для принятия решения.
+
 ## Изменения
 
 - Соблюдайте границы задачи. Не добавляйте незапрошенные функции и масштабные попутные рефакторинги.
@@ -157,6 +163,103 @@ npm run catalog:log                              # чтение журнала �
 - Контракт `MaterialsDraft` (`baseVersionId`, `items: [{ productId, quantity, expectedUnit }]`) остаётся обязательным. `quantity > 0` и `expectedUnit` сверяются с `product.unit` для отлова 409-конфликта единиц. Ручного ввода `quantity` инженером пока нет, но поле обязательно.
 - Черновик материалов передаёт `baseVersionId`, редактор цен — `baseRevision`; конфликт не должен затирать сохранённую версию или введённый черновик. Контракты и ограничения — в `README.md`.
 - Просмотр правил и стартовых цен не создаёт настроек в БД. Таблицы `object_material_versions` и `work_price_versions` создаются при первой фактической записи; старые данные не мигрировать без согласования.
+
+### Инварианты TASK-04 (подэтап A)
+
+- `calculatePlumbing(input)` — чистое ядро, без БД, без AI, без времени/случайности. Повторный вызов с одинаковым входом даёт побайтно одинаковый JSON.
+- Список приборов закрыт в `src/plumbing-config.ts`. Неизвестный `type` отклоняется валидацией, не выдумывается.
+- `PlumbingInput.rooms[].roomId` — строковая ссылка на `HeatingInput.rooms[].id`. Дубликаты `roomId` отклоняются.
+- `hasRecirculation: null` при наличии ГВС-приборов в комнате даёт блок `requires_engineer_review` с `code: GHRS_REVIEW_NEEDED`. `null` НЕ трактуется как «нет рециркуляции».
+- Источник ГВС: 7 значений (`two_loop_boiler`, `gas_boiler`, `indirect_boiler`, `electric_boiler`, `gas_column`, `none`, `unknown`). `unknown` + есть ГВС-приборы → `impossible`. `none` + есть ГВС-приборы → `impossible`. Длину трубы не считаем.
+- Стоимость работ в подэтапе A не считается. Подключение `/works` и `ivokPriceRub` — подэтап B, не раньше.
+- БД, HTTP, форма — не задействованы. Сохранение и HTTP — подэтап C.
+- Канализация (50/110, лежаки, трапы), трассы, метраж, коллекторы — отдельные подэтапы, начинать только после согласования соответствующих правил.
+
+### Инварианты TASK-04 (подэтап B)
+
+- `calculatePlumbing(input, workPrices?)` — чистое ядро. Без снимка: `costStatus: "impossible"`, `costSubtotalKopecks: null`, `costLines: []`. Со снимком: копейка-точный расчёт через `lineTotalKopecks`, цена за единицу — `ivokPriceRub(базовая, markup)`.
+- Снимок цен — отдельный входной аргумент, не читается из БД. Серверная сборка снимка по `/works` — подэтап C.
+- В B считаем только строку `heating_water_point` × `hotWaterPoints`. Рециркуляция и трапы не считаются (длина трассы и количество — подэтап D), но их позиции лежат в `workDefinitions` с базовыми ценами 1000 ₽/м и 2000 ₽/шт.
+- Расширение `workDefinitions` до 37 позиций (35 отопления + 2 водоснабжения) не ломает `parseWorkPriceDraft`: контракт остаётся «все цены всех работ».
+- Сумма строки хранится в копейках (`totalKopecks`). Цена за единицу — в рублях, потолок (без копеек), `ivokPriceRub` отклоняет переполнение.
+- Тесты `test/plumbing.test.ts` детерминированы; повторный вызов с одинаковым входом и снимком даёт побайтно одинаковый JSON.
+
+### Инварианты TASK-04 (подэтап D1, канализация)
+
+- `calculateSewage(input, workPrices?)` — чистое ядро, побайтно детерминировано. Без снимка: `costStatus: "impossible"`, `costSubtotalKopecks: null`, `costLines: []`. Со снимком: копейка-точный расчёт через `lineTotalKopecks`, цена за единицу — `ivokPriceRub(базовая, markup)`.
+- Матрица стоков в `src/sewage-config.ts`: Ø110 только у унитаза; Ø50 у раковины, мойки кухонной, душа, ванны, гигиенического душа, стиральной и посудомойки. Неизвестный `type` отклоняется валидацией, не выдумывается.
+- `SewageInput.sewer.trapCount: number | null`. Любое `trapCount > 0` **увеличивает количество точек Ø50** в смете — монтаж трапа входит в цену точки Ø50, отдельной строки `plumbing_trap_install` в `costLines` нет. `null` выдаёт `SEWAGE_TRAP_COUNT_MISSING` **только если в канализации есть приборы с `drainsToFloor: true`** (душ). Без душовых приборов `null` трактуется как «трапы не предусмотрены» и предупреждения не выдаёт.
+- `SewageInput.sewer.alreadyExecuted: WorkId[]` — строки из `workDefinitions`, дубли и неизвестные ID отклоняются. Уже выполненные строки исключаются из сметы, в `appliedRules` добавляется `SEWAGE_ALREADY_EXECUTED`.
+- `SewageInput.plumbing` валидируется тем же `parsePlumbingInput`, что и для водоснабжения. Дубли `roomId` и отрицательные `count` отклоняются.
+- `SewageReport.lengthM: number` (не `null`): сумма `lengthM` всех лежаков, включая `alreadyExecuted: true`. `null` сохранён в типе только для совместимости со старыми отчётами. Ø100 в канализации не используется (D3); автопересчёт Ø100→Ø110 не выполняется.
+- Справочник работ расширен до 40 позиций (35 отопления + 2 водоснабжения + 3 канализации): `sewage_point_50` (1500 ₽/точка), `sewage_point_110` (2500 ₽/точка), `sewer_main` (1000 ₽/м). Позиция `plumbing_trap_install` остаётся в справочнике и используется в `PlumbingWorkPrices` (водоснабжение), но в снимке канализации её нет. Снимок собирает `WorkStore.getSewagePrices()`.
+- **Правила D3 (согласованные):** в канализации только Ø50 и Ø110. Коллекторы канализации не считаются. Рециркуляция у канализации отсутствует — `hasRecirculation` остаётся только в `PlumbingInput` (ГВС).
+- Тесты `test/sewage.test.ts` детерминированы; повторный вызов с одинаковым входом и снимком даёт побайтно одинаковый JSON. CLI: `npm run calculate:sewage`.
+
+### Инварианты TASK-04 (подэтап D2, лежаки канализации)
+
+- `SewerMain = { id: string, fromRoomIds: string[], lengthM: number, alreadyExecuted: boolean }` в `src/types.ts`. `SewageInput.sewer.sewerMains: SewerMain[]` (по умолчанию `[]`).
+- Покрытие комнат: каждая комната с канализационными приборами (`toilet`, `sink`, `kitchen_sink`, `bath`, `shower_cabin`, `hygiene_shower`, `washing_machine`, `dishwasher`) должна быть упомянута хотя бы в одном лежаке. Иначе `InputValidationError`. Неявного покрытия или автогенерации лежака нет.
+- `parseSewerMains` проверяет: `id` непустой и уникальный; `fromRoomIds` непустой, все `roomId` есть в `plumbing.rooms`, без дублей внутри лежака; `lengthM ≥ 0`; `alreadyExecuted: boolean`.
+- `SewageWorkPrices.sewerMainPerMeterRub` — новое поле снимка. Справочник работ расширен до **40** позиций: добавлена `sewer_main` (1000 ₽/м, `appliedToHeating: false`).
+- В смету идёт `Σ lengthM` лежаков с `alreadyExecuted: false` (если WorkId `sewer_main` не в `sewer.alreadyExecuted`). Цена за единицу — `ivokPriceRub(sewerMainPerMeterRub, markupPercent)`. Сумма строки — `lineTotalKopecks(...)`.
+- `report.lengthM` = сумма `lengthM` **всех** лежаков (включая `alreadyExecuted: true`) — пользователь видит полный метраж. `lengthM: null` сохранён в типе только для совместимости с D1-отчётами.
+- `report.sewerMains` обязателен в типе; в UI не отображается (UI — D3).
+- Правила: `SEWAGE_MAIN_FROM_ROUTES` (если есть лежаки), `SEWAGE_MAIN_ALREADY_EXECUTED` (если все лежаки `alreadyExecuted: true`), `SEWAGE_MAIN_INPUT` (напоминание о покрытии). Предупреждение `SEWAGE_MAIN_MISSING` — если `sewerMains` пуст.
+- Правило `SEWAGE_LENGTH_DEFERRED` удалено: метраж считается в D2.
+- `WorkStore.getSewagePrices()` берёт `sewer_main` из каталога и кладёт в `sewerMainPerMeterRub`.
+- Тесты `test/sewage.test.ts` детерминированы, включая 10 D2-кейсов: один/два лежака, выполненный лежак, исключение через `sewer.alreadyExecuted`, покрытие комнат, валидация `roomId` и дублей, отрицательная длина, отсутствие цены лежака, нулевая длина.
+
+### Инварианты TASK-04 (подэтап D3, согласование правил канализации)
+
+- **Ø100 не используется.** В справочнике только Ø50 и Ø110 (`sewage_point_50`, `sewage_point_110`). Автопересчёт Ø100→Ø110 не выполняется; если в проекте появится Ø100, это ошибка инженера, не выдумывается.
+- **Монтаж трапа входит в цену точки Ø50.** `trapCount > 0` прибавляется к `points50`. Отдельной строки `plumbing_trap_install` в `SewageCostLine` нет. Поле `SewageWorkPrices.trapInstallRub` удалено из снимка канализации. Позиция `plumbing_trap_install` остаётся в справочнике и используется в `PlumbingWorkPrices` (водоснабжение), но в канализационном снимке её нет.
+- **Коллекторы канализации не считаем.** В `appliedRules` и `costLines` нет правил и строк про коллекторы. Справочник коллекторов не задействован.
+- **Рециркуляция у канализации отсутствует.** `SewageInput` и `SewageReport` не содержат `hasRecirculation`; это поле остаётся только в `PlumbingInput` (ГВС).
+- `lengthM: number` в `SewageReport` (не `null`); `null` оставлен в типе только для совместимости с D1-отчётами.
+- Предупреждение `SEWAGE_TRAP_COUNT_MISSING` ужесточено: выдаётся только при `trapCount === null` **и** наличии в канализации приборов с `drainsToFloor: true` (душ). Иначе `null` трактуется как «трапы не предусмотрены».
+- Добавлено правило `SEWAGE_TRAP_INCLUDED` в `appliedRules` (напоминание: монтаж трапа входит в цену точки Ø50).
+- Тесты `test/sewage.test.ts` расширены тремя D3-кейсами: `trapCount=null` без душовых, `trapCount=null` с душом (предупреждение), `trapCount=2` с душем (3 точки Ø50). Round-trip `examples/sewage-input.json` + `examples/sewage-prices.json` даёт 5 точек Ø50 (4 прибора + 1 трап) + 1×Ø110 + 7 м лежака = 24 650 ₽ (2 465 000 коп).
+
+### Инварианты TASK-04 (подэтап C)
+
+- Снимок цен передаётся клиентом + `baseRevision`. `PlumbingRevisionConflictError` (409) при несовпадении с текущей редакцией `WorkStore.getCatalog().revision`.
+- Расширение `calculations` обратно совместимо: `block DEFAULT 'heating'` для существующих строк, `ALTER TABLE ADD COLUMN` для работающих БД. Старые heating-отчёты и старые отчёты без снимка читаются без миграции.
+- `ObjectDetails.plumbingCalculations` — отдельный массив, не влияет на существующий `calculations`. Heating и plumbing версии не смешиваются.
+- Запись атомарна (BEGIN IMMEDIATE/COMMIT/ROLLBACK). Снимок цен и отчёт сохраняются в одной транзакции.
+- `POST /api/objects/:id/plumbing` возвращает 404 для несуществующего объекта, 503 если репозиторий не `SqliteProjectRepository`, 405 для других методов.
+- Существующие `addCalculation`/`getObject` не должны ломаться: `getObject` разделяет строки по `block` и раскладывает в `calculations` (heating) и `plumbingCalculations` (plumbing).
+- Рабочая БД не редактируется автоматически: `ALTER TABLE` применяется при первом запуске нового бэкенда. Перед первым запуском в продакшене — резервная копия.
+
+### Инварианты TASK-04 (подэтап E, UI-вкладка)
+
+- Единая страница `/santeh?objectId=...` с двумя секциями (водоснабжение, канализация). Без `objectId` — сообщение и ссылка на `/`. Открывается в новой вкладке через ссылку из карточки объекта (`index.html`).
+- Список комнат в форме подтягивается из `GET /api/objects/:id` → последняя версия отопления → `input.rooms[].id`. Если отопления нет — принимаем любые `roomId` (как `parsePlumbingInput`).
+- Расчёт без сохранения: `POST /api/plumbing` (уже есть) и `POST /api/sewage` (новый). Снимок цен берёт сервер.
+- Сохранение: `POST /api/objects/:id/plumbing` (уже есть) и `POST /api/objects/:id/sewage` (новый). `baseRevision` обязателен, 409 при несовпадении с текущей редакцией `WorkStore.getCatalog().revision`.
+- `calculations.block` расширяется до `('heating', 'plumbing', 'sewage')` через миграцию SQLite: пересоздание CHECK-ограничения (без потери данных). Существующие строки heating/plumbing не трогаем.
+- `ObjectDetails` получает третье поле `sewageCalculations: SavedSewageCalculation[]`. `plumbingCalculations` и `sewageCalculations` не смешиваются.
+- `SavedSewageCalculation` хранит `input` (включая `plumbing.rooms`), `report` (с `sewerMains`, `lengthM`, `costLines`), снимок `SewageWorkPrices` и `parameterMetadata`.
+- Запись атомарна (BEGIN IMMEDIATE/COMMIT/ROLLBACK). Старые heating-отчёты, plumbing-отчёты, версии материалов и работ не затираются.
+- UI вкладки не выдумывает цены и расценки: всё, что показывается как «итого», приходит из `costSubtotalKopecks` отчёта. Перед уходом с несохранённой формой — `beforeunload`, как в `/works`.
+- Тесты: новый `test/sewage-server.test.ts` (минимум 5 кейсов: 201 сохранения, 404 на несуществующий объект, 409 на устаревший `baseRevision`, 503 на не-SQLite, независимость heating/plumbing/sewage). `npm test` зелёный, `npm run typecheck` чистый.
+- Не входит в E: визуализация лежаков, PDF, история изменений стоимости, сохранение канализации без `plumbing.rooms` (невозможно по инварианту D1).
+
+### Инварианты TASK-04 (подэтап E2, рециркуляция-петля, стояки, длина per-fixture)
+
+- **`PlumbingInput.recirculationLengthM: number | null`** — длина петли рециркуляции ГВС одной трубой (бойлер → приборы ГВС → бойлер). Если `null`/0/пропуск — петля не проложена, стоимость не считается. `calculatePlumbing` (B) формирует строку `plumbing_recirculation` × `recirculationLengthM` × `ivokPriceRub(recirculationPerMeterRub, markup)` и **перестаёт добавлять** `PLUMBING_COST_RECIRCULATION_DEFERRED`.
+- Если в объекте есть ГВС-приборы и `hasRecirculation === true` хотя бы в одной комнате, а `recirculationLengthM` не задан (null/0) — `costStatus: requires_engineer_review` + предупреждение `PLUMBING_RECIRCULATION_LENGTH_MISSING`. Это явный сигнал инженеру: «вы включили рециркуляцию, но не задали длину петли».
+- **`PlumbingInput.rooms[].fixtures[].lengthM: number | null`** — длина трассы подачи ХВС+ГВС к прибору. **Сохраняется** в `SavedPlumbingCalculation.input`, но **не участвует** в `costLines` (D+). `null`/пропуск = длина неизвестна.
+- Старые сохранённые версии без `recirculationLengthM` / `fixture.lengthM` читаются без миграции: `parsePlumbingInput` принимает отсутствие полей и трактует их как `null`. Старые сметы не пересчитываются.
+- **`SewageInput.sewer.standpipes: number`** — количество фановых стояков (целое ≥ 0, по умолчанию 0). `parseSewageInput` принимает отсутствие поля и трактует как 0.
+- **Справочник работ:** добавлена `sewage_standpipe` (`шт`, базовая цена 3000 ₽, `appliedToHeating: false`). Итого 41 позиция в `workDefinitions`. Расширение не ломает `parseWorkPriceDraft` (контракт остаётся «все цены всех работ»).
+- **`SewageWorkPrices.standpipeRub`** — новое поле снимка. `WorkStore.getSewagePrices()` берёт `sewage_standpipe` из каталога и кладёт в `standpipeRub`.
+- `calculateSewage` добавляет строку `sewage_standpipe` × `standpipes` × `ivokPriceRub(standpipeRub, markup)` в `costLines` если `standpipes > 0` и `sewage_standpipe` не в `sewer.alreadyExecuted`. Правило `SEWAGE_STANDPIPE_FROM_INPUT`. `alreadyExecuted` исключает стояк из сметы.
+- **Рециркуляция в канализации отсутствует** (D3): `SewageInput` не получает `recirculationLengthM` — это поле только в `PlumbingInput`.
+- **Длина подачи ХВС/ГВС не считается** как стоимость в E2 — это D+.
+- **UI** (`public/santeh.html`, `public/santeh.js`): в водоснабжении каждая строка — прибор (dropdown) + длина трассы (число) + комментарий (текст). Длина петли рециркуляции — одно поле. В канализации порядок: лежаки (без ID в UI), стояки (число), трапы, выполненные закладные. После расчёта канализации — метрики `Ø50/Ø110/длина/стояки/стоимость`.
+- **Тесты:** новый `test/e2-plumbing.test.ts` (round-trip: рециркуляция считается, длина per-fixture сохраняется, отсутствие длины → предупреждение). Расширить `test/sewage.test.ts` кейсами для стояков. `npm test` зелёный, `npm run typecheck` чистый.
+- **Не входит в E2:** стоимость по `fixture.lengthM` (D+), многостояковые схемы с разными длинами петель, визуализация лежаков.
 
 ### Границы и проверка изменений
 

@@ -1,4 +1,14 @@
-import type { CalculationStatus, HeatingInput, HeatingReport } from "./types.js";
+import type {
+  CalculationStatus,
+  HeatingInput,
+  HeatingReport,
+  PlumbingInput,
+  PlumbingReport,
+  PlumbingWorkPrices,
+  SewageInput,
+  SewageReport,
+  SewageWorkPrices,
+} from "./types.js";
 
 export const LOCAL_ORGANIZATION_ID = "org-local";
 
@@ -55,6 +65,48 @@ export interface SavedCalculation {
   createdAt: string;
 }
 
+export type CalculationBlock = "heating" | "plumbing" | "sewage";
+
+export interface PlumbingCalculationDraft {
+  input: PlumbingInput;
+  parameterMetadata: ParameterMetadataDraft[];
+  workPrices: PlumbingWorkPrices;
+  /** Редакция справочника, на которой собран снимок. Конфликт 409 если не совпадает с текущей. */
+  baseRevision: number;
+}
+
+export interface SavedPlumbingCalculation {
+  id: string;
+  organizationId: string;
+  objectId: string;
+  block: "plumbing";
+  input: PlumbingInput;
+  report: PlumbingReport;
+  workPrices: PlumbingWorkPrices;
+  parameters: SavedParameterMetadata[];
+  createdAt: string;
+}
+
+export interface SewageCalculationDraft {
+  input: SewageInput;
+  parameterMetadata: ParameterMetadataDraft[];
+  workPrices: SewageWorkPrices;
+  /** Редакция справочника, на которой собран снимок. Конфликт 409 если не совпадает с текущей. */
+  baseRevision: number;
+}
+
+export interface SavedSewageCalculation {
+  id: string;
+  organizationId: string;
+  objectId: string;
+  block: "sewage";
+  input: SewageInput;
+  report: SewageReport;
+  workPrices: SewageWorkPrices;
+  parameters: SavedParameterMetadata[];
+  createdAt: string;
+}
+
 export interface ObjectSummary {
   id: string;
   organizationId: string;
@@ -74,6 +126,8 @@ export interface ObjectDetails {
   createdAt: string;
   updatedAt: string;
   calculations: SavedCalculation[];
+  plumbingCalculations: SavedPlumbingCalculation[];
+  sewageCalculations: SavedSewageCalculation[];
 }
 
 export interface ProjectRepository {
@@ -82,5 +136,7 @@ export interface ProjectRepository {
   createObject(draft: CreateObjectDraft, report: HeatingReport | null): ObjectDetails;
   updateObject(objectId: string, client: ClientDraft, object: ObjectDraft): ObjectDetails | null;
   addCalculation(objectId: string, draft: CalculationDraft, report: HeatingReport): SavedCalculation | null;
+  addPlumbingCalculation(objectId: string, draft: PlumbingCalculationDraft, report: PlumbingReport): SavedPlumbingCalculation | null;
+  addSewageCalculation(objectId: string, draft: SewageCalculationDraft, report: SewageReport): SavedSewageCalculation | null;
   close(): void;
 }

@@ -1,0 +1,7 @@
+{
+  "revision": 1,
+  "waterHotPointRub": 2000,
+  "recirculationPerMeterRub": 1000,
+  "trapInstallRub": 2000,
+  "markupPercent": 45
+}

@@ -11,7 +11,8 @@
 | TASK-01 | Прототип отопления и частичные расчёты реализованы. Итоговую инженерную приёмку фиксировать отдельно. |
 | TASK-02 | Локальные карточки, SQLite и версии расчётов реализованы. Ручная приёмка и отложенные улучшения перечислены ниже. |
 | TASK-03 | Каталог, материалы, цены работ и просмотр норм реализованы. Стоимость материалов в текущем этапе не отображается и не входит в КП; оставшиеся открытые позиции (импорт в браузере, качество исходной выгрузки, расширение выгрузки, закрытие задачи) перечислены ниже. |
-| TASK-04–TASK-09 | Не начаты. Запускать только по отдельному запросу. |
+| TASK-04 (A, B, C, D1, D2, D3, E, E2, модель комнат) | Реализован и покрыт тестами (173/173, typecheck чистый). UI сантехники использует правильную модель «комната → fixtures[]» (TaskCheck P1): roomId подтягивается из последней версии отопления или добавляется вручную, лежаки привязаны к реальным комнатам. **Итоговая инженерная приёмка реальных примеров фиксируется отдельно — автоматические тесты не заменяют ручную приёмку.** |
+| TASK-05–TASK-09 | Не начаты. Запускать только по отдельному запросу. |
 
 **Ближайшее решение:** согласовать закрытие TASK-03 с учётом разделённого сценария материалы/КП, либо явно зафиксировать текущий этап как итоговый для локального режима.
 
@@ -253,7 +254,144 @@
 - До реализации согласовано, входит ли монтаж трапа в цену канализационной точки: одна работа не оплачивается дважды.
 - Обозначение Ø100 в проекте не заменяется на Ø110 автоматически; требуется согласованное правило или подтверждение инженера.
 
+### Подэтап A — подсчёт точек (реализован)
+
+- [x] Чистая функция `calculatePlumbing(input)` в `src/plumbing.ts`, без БД и без случайности.
+- [x] Фиксированная матрица приборов в `src/plumbing-config.ts`: ванна, душевая кабина, раковина, гигиенический душ, унитаз, стиральная машина, посудомоечная машина, кухонная мойка. Неизвестный тип отклоняется валидацией, не выдумывается.
+- [x] `parsePlumbingInput` в `src/plumbing-validation.ts`: `null` = неизвестно, дубли `roomId`, отрицательные `count`, неизвестный источник ГВС отклоняются.
+- [x] Источник ГВС: `two_loop_boiler`, `gas_boiler`, `indirect_boiler`, `electric_boiler`, `gas_column`, `none`, `unknown`.
+- [x] Рециркуляция задаётся на комнату (`hasRecirculation: true | false | null`). `null` + есть ГВС-приборы → блок `requires_engineer_review`. Длину трубы не считаем — это про трассы, подэтап D.
+- [x] Пример «ванна + раковина + унитаз» → 3 ХВС и 2 ГВС, общий статус `calculated`.
+- [x] CLI `npm run calculate:plumbing -- examples/plumbing-input.json` печатает отчёт в stdout.
+- [x] Регрессионные тесты `test/plumbing.test.ts` (13 кейсов). Полный прогон `npm test` — 108/108, `npm run typecheck` чистый.
+- [ ] **Не входит в A:** стоимость работ (подэтап B), сохранение в SQLite и HTTP (подэтап C), канализация, лежаки, трассы, коллекторы, канализационные точки.
+
+### Подэтап B — стоимость работ (реализован)
+
+- [x] В справочник `workDefinitions` добавлены `plumbing_recirculation` (1000 ₽/м) и `plumbing_trap_install` (2000 ₽/шт). Справочник — 37 позиций.
+- [x] `PlumbingWorkPrices` — снимок: `revision`, `waterHotPointRub`, `recirculationPerMeterRub`, `trapInstallRub`, `markupPercent`. По умолчанию наценка 45%.
+- [x] `calculatePlumbing(input, workPrices?)` — без снимка: `costStatus: "impossible"`, `costSubtotalKopecks: null`, пустые `costLines`. Со снимком: строка `heating_water_point` × `hotWaterPoints` × `ivokPriceRub(базовая, наценка)`, `costSubtotalKopecks` — точная сумма в копейках.
+- [x] Рециркуляция и трапы в B не считаются (длина трассы и количество трапов — подэтап D). В `costAppliedRules` отметки `PLUMBING_COST_RECIRCULATION_DEFERRED` и `PLUMBING_COST_TRAPS_DEFERRED`.
+- [x] CLI `--prices файл.json` подключает снимок цен. Пример `examples/plumbing-prices.json`.
+- [x] Регрессионные тесты `test/plumbing.test.ts`: 8 новых кейсов (пустой/со снимком/нулевая цена/большое количество/детерминизм/37 работ). Полный прогон `npm test` — 116/116, `npm run typecheck` чистый.
+- [ ] **Не входит в B:** SQLite и HTTP (подэтап C), канализация, лежаки, трассы, коллекторы.
+
+### Подэтап C — сохранение в SQLite и HTTP (реализован)
+
+- [x] Схема `calculations` расширена: колонка `block TEXT NOT NULL DEFAULT 'heating' CHECK (block IN ('heating', 'plumbing'))` и `work_prices_json TEXT NULL`. Для существующих БД — `ALTER TABLE` через `#migrate()`.
+- [x] `WorkStore.getPlumbingPrices()` — собирает снимок из текущего каталога.
+- [x] `parsePlumbingWorkPricesDraft(value)` — валидация черновика снимка: `baseRevision` + цены. `PlumbingRevisionConflictError` при несовпадении `baseRevision` с текущей редакцией.
+- [x] `addPlumbingCalculation(objectId, draft, report)` в `SqliteProjectRepository`: атомарно INSERT c `block='plumbing'`, `work_prices_json=JSON.stringify(workPrices)`, плюс параметры входа и выхода. Обновляет `client_objects.updated_at`.
+- [x] `ObjectDetails.plumbingCalculations: SavedPlumbingCalculation[]` — отдельный массив рядом с `calculations`. Старые heating-расчёты не трогаются.
+- [x] HTTP-маршруты: `POST /api/plumbing` (расчёт без сохранения) и `POST /api/objects/:id/plumbing` (сохранение). 201/400/404/409, 503 если не SQLite.
+- [x] Регрессионные тесты `test/plumbing-server.test.ts`: 7 кейсов. Полный прогон `npm test` — 123/123, `npm run typecheck` чистый.
+- [ ] **Не входит в C:** UI-вкладка (отдельный подэтап E), канализация, лежаки, трассы, коллекторы.
+
 **Зависит от:** TASK-02, TASK-03.
+
+### Подэтап D1 — подсчёт точек и стоимость канализации (реализован)
+
+- [x] `src/sewage-config.ts`: фиксированная матрица стоков. Ø110 — унитаз; Ø50 — раковина, мойка кухонная, душ, ванна, гигиенический душ, стиральная и посудомойка. Дополнительно признак `drainsToFloor` для будущих трапов.
+- [x] `src/sewage.ts` — `calculateSewage(input, workPrices?)` без БД, без AI, побайтно детерминировано. Повторный вызов с тем же входом и снимком даёт идентичный JSON.
+- [x] `src/sewage-validation.ts`: `parseSewageInput` (через `parsePlumbingInput`), `parseSewageWorkPrices`, `parseSewageWorkPricesDraft`. `sewer.trapCount: number | null`, `sewer.alreadyExecuted: WorkId[]` — непустые строки из `workDefinitions`, дубли отклоняются.
+- [x] Снимок цен — отдельный `SewageWorkPrices` (`sewagePoint50Rub`, `sewagePoint110Rub`, `trapInstallRub`, `markupPercent`, `revision`). Справочник работ расширен с 37 до 39 (`sewage_point_50` 1500 ₽, `sewage_point_110` 2500 ₽).
+- [x] `WorkStore.getSewagePrices()` собирает снимок из каталога.
+- [x] Без снимка — `costStatus: "impossible"`, `costSubtotalKopecks: null`, `costLines: []`. Со снимком — копейка-точный расчёт через `lineTotalKopecks`, цена за единицу через `ivokPriceRub` с наценкой.
+- [x] `trapCount === null` исключает строку трапа и даёт предупреждение `SEWAGE_TRAP_COUNT_MISSING`.
+- [x] `alreadyExecuted` исключает указанные строки из сметы и порождает правило `SEWAGE_ALREADY_EXECUTED`.
+- [x] `lengthM: null` + `SEWAGE_LENGTH_DEFERRED` — метраж трасс отложен в D2.
+- [x] CLI: `npm run calculate:sewage -- examples/sewage-input.json [--prices examples/sewage-prices.json]`. Пример ванна+раковина+унитаз + кухня даёт 4×Ø50, 1×Ø110, 1 трап, 15 225 ₽ при наценке 45%.
+- [x] Тесты `test/sewage.test.ts`: 16 кейсов, в том числе round-trip с примерами. `npm test` — 139/139, `npm run typecheck` чистый.
+- [ ] **Не входит в D1:** UI-вкладка, сохранение в SQLite, HTTP, метраж трасс (D2), коллекторы и автопересчёт Ø100→Ø110 (D3).
+
+### Подэтап D2 — лежаки канализации (реализован)
+
+- [x] `SewerMain` в `src/types.ts`: `{ id, fromRoomIds: string[], lengthM: number, alreadyExecuted: boolean }`. `sewerMains: SewerMain[]` (по умолчанию `[]`) в `SewageInput.sewer`.
+- [x] `SewageWorkPrices.sewerMainPerMeterRub` — новое поле снимка. Справочник работ расширен: `sewer_main` (прокладка лежака, `м`, 1000 ₽, `appliedToHeating: false`). Итого в справочнике **40** работ.
+- [x] `WorkStore.getSewagePrices()` берёт `sewer_main` из каталога и кладёт в `sewerMainPerMeterRub`.
+- [x] `parseSewerMains` валидирует: `id` непустой и уникальный, `fromRoomIds` непустой, все `roomId` существуют в `plumbing.rooms`, без дублей внутри лежака, `lengthM ≥ 0`, `alreadyExecuted: boolean`.
+- [x] **Покрытие комнат:** каждая комната с канализационными приборами (`toilet`, `sink`, `kitchen_sink`, `bath`, `shower_cabin`, `hygiene_shower`, `washing_machine`, `dishwasher`) должна быть упомянута хотя бы в одном лежаке. Иначе `InputValidationError`.
+- [x] `calculateSewage`:
+  - `lengthM` = сумма `lengthM` **всех** лежаков (включая `alreadyExecuted: true`) — пользователь видит полный метраж.
+  - В смету идёт сумма `lengthM` лежаков с `alreadyExecuted: false` (если WorkId `sewer_main` не в `sewer.alreadyExecuted`).
+  - `unitPriceRub = ivokPriceRub(sewerMainPerMeterRub, markupPercent)`, `totalKopecks = lineTotalKopecks(...)`. Цена за единицу — в рублях, потолок (без копеек).
+  - Правила: `SEWAGE_MAIN_FROM_ROUTES` (всегда, если есть лежаки), `SEWAGE_MAIN_ALREADY_EXECUTED` (если все лежаки выполнены), `SEWAGE_MAIN_INPUT` (напоминание о покрытии).
+  - Предупреждение `SEWAGE_MAIN_MISSING` — если `sewerMains` пуст, тогда `lengthM = 0` и в смете строки лежака нет.
+- [x] `SewageReport` дополнен: `lengthM: number`, `sewerMains: SewerMain[]`. Поле остаётся обязательным в ответе, но не отображается в UI (UI — подэтап D3).
+- [x] Удалено `SEWAGE_LENGTH_DEFERRED`; `lengthM` больше не `null` при наличии лежаков, `null` зарезервирован только для отчётов старого формата.
+- [x] Пример `examples/sewage-input.json` дополнен лежаком 7 м по ванной и кухне. `examples/sewage-prices.json` дополнен `sewerMainPerMeterRub: 1000`. Round-trip даёт 25 375 ₽: 8 700 (4×Ø50) + 3 625 (Ø110) + 2 900 (трап) + 10 150 (7 м лежака).
+- [x] Тесты `test/sewage.test.ts`: добавлено 10 D2-кейсов (один лежак, два лежака, выполненный лежак, исключение через `alreadyExecuted`, покрытие комнат, валидация `roomId`, дубли в `fromRoomIds`, отрицательная длина, отсутствие цены лежака в снимке, нулевая длина, детерминизм). `npm test` — 150/150, `npm run typecheck` чистый.
+- [ ] **Не входит в D2:** UI-вкладка канализации, сохранение лежаков в SQLite, HTTP, отображение `lengthM` и `sewerMains` в КП.
+
+### Подэтап D3 — согласование правил канализации (реализован)
+
+- [x] **Ø100 убран.** В справочнике остаются только Ø50 и Ø110. Автопересчёт Ø100→Ø110 не выполняется; если в проекте появится Ø100, это ошибка инженера.
+- [x] **Монтаж трапа входит в цену точки Ø50.** `trapCount > 0` увеличивает `points50`. Отдельной строки `plumbing_trap_install` в `SewageReport.costLines` нет. Поле `SewageWorkPrices.trapInstallRub` удалено из снимка канализации (работа `plumbing_trap_install` остаётся в справочнике и используется в `PlumbingWorkPrices` для водоснабжения).
+- [x] **Коллекторы канализации не считаем.** `appliedRules` и `costLines` не содержат правил про коллекторы.
+- [x] **Рециркуляция у канализации отсутствует.** `SewageInput` и `SewageReport` не содержат `hasRecirculation`; поле остаётся только в `PlumbingInput` (ГВС).
+- [x] `lengthM` теперь `number` (не `null`); `null` зарезервирован только для старых отчётов.
+- [x] Добавлено правило `SEWAGE_TRAP_INCLUDED` (напоминание: монтаж трапа входит в цену точки Ø50). Условие выдачи предупреждения `SEWAGE_TRAP_COUNT_MISSING` ужесточено: только если в канализации есть приборы с `drainsToFloor: true` (душ) и `trapCount === null`.
+- [x] Пример `examples/sewage-prices.json` без `trapInstallRub`. Round-trip: 5 точек Ø50 (4 прибора + 1 трап) = 10 875 ₽ + 1×Ø110 = 3 625 ₽ + 7 м лежака = 10 150 ₽ → итого **24 650 ₽** (2 465 000 коп).
+- [x] Тесты `test/sewage.test.ts`: добавлено 3 D3-кейса (`trapCount=null` без душовых, `trapCount=null` с душом, `trapCount=2` с душем → 3 точки Ø50), переписан round-trip (24 650 ₽ / 2 465 000 коп), обновлены старые тесты под новые правила. `npm test` — 153/153, `npm run typecheck` чистый.
+- [ ] **Не входит в D3:** UI-вкладка канализации, сохранение расчёта в SQLite, HTTP, отображение `lengthM` и `sewerMains` в КП.
+
+### Подэтап E — UI-вкладка водоснабжения/канализации (реализован)
+
+- [ ] **Цель:** дать инженеру единую вкладку `/santeh?objectId=...` с двумя секциями (водоснабжение и канализация) для ввода данных, расчёта без сохранения и сохранения версий. HTTP-сохранение в SQLite (A/B/C/D1/D2/D3) уже работает, нужно обернуть его в форму.
+- [ ] **Открытие из карточки объекта:** ссылка «Сантехника — в новой вкладке» в `index.html` рядом с «Каталог материалов», «Справочник работ», «Правила расчёта». В объекте без `id` ссылка скрыта.
+- [ ] **Структура страницы `public/santeh.html` + `public/santeh.js`:** шапка с указанием объекта, левая колонка — список сохранённых версий водоснабжения/канализации, правая — форма (источник ГВС, список комнат с приборами, рециркуляция; ниже — канализация: `trapCount`, `alreadyExecuted`, лежаки).
+- [ ] **Список комнат в форме:** комнаты загружаются с сервера из последней версии отопления (`GET /api/objects/:id` → `calculations[-1].input.rooms[].id`). Если отопления нет, форма принимает любые `roomId` (как сейчас через `parsePlumbingInput`). Это согласовано: каталог коллекторов и автоподбор помещений не нужны в D1–D3.
+- [ ] **Расчёт без сохранения:** «Посчитать воду» → `POST /api/plumbing`; «Посчитать канализацию» → новый `POST /api/sewage` (см. ниже). Снимок цен берётся сервером из `repository.works.getPlumbingPrices()` / `getSewagePrices()`.
+- [ ] **Сохранение:** «Сохранить версию» отправляет `POST /api/objects/:id/plumbing` или `POST /api/objects/:id/sewage` с `input`, `parameterMetadata`, `workPrices` (включая `baseRevision`). Устаревшая редакция → 409, инженер должен нажать «Загрузить актуальные цены» и повторить.
+- [ ] **Список версий:** новые поля `plumbingCalculations` (уже есть) и `sewageCalculations` (новое) в `ObjectDetails`; в UI — две колонки «Версии водоснабжения» и «Версии канализации» с датой, статусом, количеством точек и суммой.
+- [ ] **Бэкенд-изменения под UI:**
+  - Расширить `calculations.block` CHECK до `('heating', 'plumbing', 'sewage')` через миграцию `ALTER TABLE ... DROP CONSTRAINT / ADD CONSTRAINT` (SQLite ≥ 3.35) либо создать `calculations` заново — выбираем вариант с пересозданием ограничения, так как существующие строки heating/plumbing не трогаем.
+  - Добавить `SewageCalculationDraft` и `SavedSewageCalculation` в `src/projects.ts`, `parseSewageCalculationDraft` в `src/project-validation.ts`, `addSewageCalculation` в `SqliteProjectRepository`. `SewageRevisionConflictError` (по аналогии с `PlumbingRevisionConflictError`) при несовпадении `baseRevision` → 409.
+  - HTTP-маршруты: `POST /api/sewage` (расчёт без сохранения), `POST /api/objects/:id/sewage` (сохранение). 404/409/503 по тем же правилам, что и для plumbing.
+  - `ObjectDetails.sewageCalculations: SavedSewageCalculation[]` — отдельно от `plumbingCalculations`, оба идут в `getObject`.
+- [ ] **Тесты:** новый `test/sewage-server.test.ts` (минимум 5 кейсов: 201 при сохранении, 404 на несуществующий объект, 409 на устаревший `baseRevision`, 503 на не-SQLite репозиторий, сохранение канализации не затирает ни heating, ни plumbing). Расширить `test/plumbing-server.test.ts` кейсом «UI-форма отправляет корректный снимок цен». `npm test` зелёный, `npm run typecheck` чистый.
+- [ ] **UX-инварианты:** вкладка работает только при `?objectId=<id>`; без него — сообщение «Сначала откройте карточку объекта» и ссылка на `/`. Пустой ввод → `costStatus: impossible`, без снимка цен явно показано «Снимок цен не передан». Перед уходом с несохранённой формой — `beforeunload`, как в `/works`.
+- [ ] **Не входит в E:** лежаки на карте/визуализация, PDF, история изменений стоимости, версионирование `lengthM` отдельно от версии канализации, импорт из 1С/Telegram, сохранение канализации без plumbing-ввода (невозможно по инварианту D1: `sewage.plumbing.rooms` обязателен).
+- [ ] **Критерий готовности:** инженер открывает `/santeh?objectId=...`, видит сохранённые ранее версии (если есть), вводит новые данные, считает, сохраняет. После сохранения появляется новая запись в списке версий, старая не изменилась. Перезапуск сервера не теряет данные.
+
+### Подэтап E2 — упрощение UI водоснабжения, рециркуляция-петля, стояки канализации (реализован)
+
+Согласованные с инженером изменения после первого запуска E:
+
+- [x] **Контракт `PlumbingInput`:**
+  - `rooms[]` остаётся обязательным для подсчёта точек ХВС/ГВС и для `SewageInput.plumbing.rooms` (D1). Без rooms приборы не считаются.
+  - **Новое поле per-fixture:** `lengthM: number | null` — длина трассы подачи ХВС+ГВС к прибору. В B/E2 это поле **сохраняется в снимке** (для будущего расчёта D+), но в `costLines` **не участвует** (отдельная задача). `null`/пропуск = длина неизвестна.
+  - **Новое поле объекта:** `recirculationLengthM: number | null` — длина петли рециркуляции ГВС (бойлер → приборы ГВС → бойлер одной трубой). Если `null`/0/пропуск — петля не проложена, стоимость не считается.
+  - Старые сохранённые версии без `lengthM`/`recirculationLengthM` читаются: эти поля = `null` (длина неизвестна), старые сметы не пересчитываются.
+- [x] **Контракт `SewageInput`:**
+  - **Новое поле:** `sewer.standpipes: number` — количество фановых стояков (целое ≥ 0). По умолчанию 0.
+  - `sewerMains`, `trapCount`, `alreadyExecuted` — без изменений (D1/D2).
+- [x] **Справочник работ (`workDefinitions`):**
+  - Добавлена `sewage_standpipe` (монтаж фанового стояка, `шт`, базовая цена 3000 ₽, `appliedToHeating: false`). Итого 41 позиция.
+- [x] **Снимок `SewageWorkPrices`:**
+  - Новое поле `standpipeRub` (базовая цена за штуку).
+  - `WorkStore.getSewagePrices()` берёт `sewage_standpipe` из каталога и кладёт в `standpipeRub`.
+- [x] **Расчёт стоимости (E2):**
+  - `calculatePlumbing`: добавить строку `plumbing_recirculation` × `recirculationLengthM` × `ivokPriceRub(recirculationPerMeterRub, markup)`. Удалить `PLUMBING_COST_RECIRCULATION_DEFERRED`. Если в объекте есть ГВС-приборы, но `hasRecirculation === true` хотя бы в одной комнате, а `recirculationLengthM` не задан (null/0) — `costStatus: requires_engineer_review` с предупреждением `PLUMBING_RECIRCULATION_LENGTH_MISSING` (длина петли не задана, инженер должен либо ввести длину, либо убрать рециркуляцию).
+  - `calculateSewage`: добавить строку `sewage_standpipe` × `standpipes` × `ivokPriceRub(standpipeRub, markup)` в `costLines` (если `standpipes > 0` и WorkId `sewage_standpipe` не в `sewer.alreadyExecuted`). Правило `SEWAGE_STANDPIPE_FROM_INPUT`.
+  - Длины подачи (`fixture.lengthM`) **не считаются** — это D+.
+- [x] **UI `public/santeh.html` + `public/santeh.js`:**
+  - Водоснабжение: каждая строка — `type` (раскрывающийся список приборов), `lengthM` (число), `comment` (свободный текст, не идёт в счёт). При выборе типа автоматически проставляется ХВС/ГВС по матрице (как сейчас).
+  - **Поле объекта:** «Длина петли рециркуляции, м» (одно число, `recirculationLengthM`).
+  - Канализация: лежаки (без `id`, только комнаты + длина + выполнено), под ними — блок «Стояки» с полем «Количество, шт», под ним — `trapCount`, в самом низу — «уже выполненные закладные».
+  - После расчёта канализации — блок метрик: `Ø50 точек`, `Ø110 точек`, `Длина лежаков, м`, `Стояки, шт`, `Стоимость` (отдельно статус расчёта и статус стоимости).
+  - ID лежака в UI не показывается, но в API сохраняется (для `alreadyExecuted`).
+- [x] **Сохранение в БД:** новое поле `recirculationLengthM` записывается в `SavedPlumbingCalculation.input` как часть `PlumbingInput`. Старые строки без поля читаются без миграции (parse принимает отсутствие).
+- [x] **Тесты:** `test/e2-plumbing.test.ts` (round-trip: вход + снимок → ожидаемая сумма со строкой рециркуляции). `test/sewage.test.ts` расширен кейсами для стояков. `npm test` зелёный (170/170), `npm run typecheck` чистый.
+- [x] **Корректировки по `TaskCheck.md` (P1, P2):**
+  - `kopToRub` в `santeh.js` различает `null` (→ «Не рассчитано») и `0` (→ «0 ₽»); в UI отдельный статус `report.costStatus` и пояснение причины при `null`-стоимости.
+  - В списке версий отдельные бейджи `status` (расчёт) и `costStatus` (стоимость).
+  - **Правильная модель комнат** в `santeh.js`: комнаты с уникальным `roomId` (из отопления или ручной ввод), `name`, `hasRecirculation`; внутри — `fixtures[]` с типом, количеством, длиной трассы, комментарием. Лежаки канализации выбирают `roomId` из реальных комнат. `buildPlumbingInput` фильтрует пустые комнаты и приборы, нормализует типы и `count` в `integer ≥ 0`. Покрыто `test/santeh-ui-shape.test.ts` (3 кейса).
+  - `parseSewageInput` больше не отвергает вход из-за непокрытых лежаками комнат; `calculateSewage` выдаёт `status: requires_engineer_review` с `missingParameters` и предупреждением `SEWAGE_MAIN_INCOMPLETE`.
+  - Добавлен `test/migration.test.ts` — регрессионный тест миграции старой `calculations` в новую схему с `block` и расширенным CHECK.
+- [ ] **Не входит в E2:** длина подачи ХВС/ГВС как стоимость (D+), многостояковые схемы, визуализация лежаков, PDF, импорт из 1С.
+- [ ] **Критерий готовности:** инженер открывает `/santeh?objectId=...`, добавляет приборы через раскрывающийся список, вводит длину петли рециркуляции, считает, видит стоимость петли в смете. Сохраняет версию. В канализации — добавляет стояки, видит их в смете. Старые версии (без `recirculationLengthM` и стояков) читаются без пересчёта. **Итоговая инженерная приёмка фиксируется отдельно — автоматические тесты не заменяют ручную приёмку реальных примеров.**
+
 ---
 ## TASK-05. Сформировать КП, согласование и версии
 

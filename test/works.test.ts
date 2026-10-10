@@ -61,8 +61,8 @@ test("сохранение цен атомарно, устаревшая вкл�
   });
 });
 
-test("смета содержит 35 работ отопления; наценка применяется к итогу строки с округлением вверх", () => {
-  assert.equal(workDefinitions.length, 35);
+test("смета содержит 41 работу (35 отопления + 2 водоснабжения + 4 канализации); наценка применяется к итогу строки с округлением вверх", () => {
+  assert.equal(workDefinitions.length, 41);
   assert.equal(defaultMarkupPercent, 45);
   assert.equal(ivokPriceRub(12000, 45), 17400);
   assert.equal(ivokPriceRub(10.01, 45), 14.5145);
@@ -174,7 +174,7 @@ test("справочник содержит пять работ ТЗ; чтени
     const data = await response.json();
     assert.equal(data.revision, 0);
     assert.deepEqual(data.items.slice(0, 2).map((x: { priceRub: number }) => x.priceRub), [12000, 12000]);
-    assert.equal(data.items.length, 35);
+    assert.equal(data.items.length, 41);
     assert.equal(data.markupPercent, defaultMarkupPercent);
     assert.equal(data.items.find((x: { id: string }) => x.id === "heating_wall_chasing").priceRub, 0);
     assert.equal(data.items.find((x: { id: string }) => x.id === "floor_heating").priceRub, 600);

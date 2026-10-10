@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Сантехника и канализация · ИВОК</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">ИВОК · TASK-04 · локальный режим</p>
+        <h1>Сантехника и канализация</h1>
+        <p class="intro">Водоснабжение и канализация объекта. Снимок цен работ берётся из <a href="/works" target="_blank" rel="noopener noreferrer" class="page-header-link">справочника</a>.</p>
+        <nav class="page-navigation" aria-label="Разделы приложения"><a href="/" target="_blank" rel="noopener noreferrer">Карточки объектов — в новой вкладке</a> · <a href="/works" target="_blank" rel="noopener noreferrer">Справочник работ — в новой вкладке</a></nav>
+      </div>
+    </header>
+    <main class="catalog-workspace santeh-workspace">
+      <p id="santeh-error" class="error-box" role="alert" hidden></p>
+      <p id="santeh-object" class="hint"></p>
+      <p id="santeh-status" role="status" aria-live="polite">Загрузка объекта…</p>
+
+      <section class="panel" aria-labelledby="water-heading">
+        <h2 id="water-heading">Водоснабжение</h2>
+        <p class="hint">Сначала добавьте комнаты объекта (или загрузите из последней версии отопления). Внутри каждой комнаты — приборы. Тип определяет ХВС/ГВС и сток; длина трассы к прибору сохраняется в снимке для будущего расчёта (D+). Рециркуляция задаётся per-room; петля — общая длина внизу.</p>
+        <form id="water-form">
+          <fieldset id="water-controls" disabled>
+            <legend class="visually-hidden">Водоснабжение объекта</legend>
+            <label>Источник ГВС
+              <select name="hotWaterSource">
+                <option value="unknown">Неизвестно</option>
+                <option value="two_loop_boiler">Двухконтурный котёл</option>
+                <option value="gas_boiler">Газовый котёл</option>
+                <option value="indirect_boiler">Бойлер косвенного нагрева</option>
+                <option value="electric_boiler">Электрокотёл</option>
+                <option value="gas_column">Газовая колонка</option>
+                <option value="none">Без горячей воды</option>
+              </select>
+            </label>
+            <div id="water-rooms" class="santeh-rooms-list"></div>
+            <button class="secondary" id="add-water-room" type="button">+ Добавить комнату</button>
+            <label class="check-field"><input id="water-has-recirculation" type="checkbox" /> Включена рециркуляция ГВС хотя бы в одной комнате (петля от бойлера через приборы ГВС обратно к бойлеру одной трубой)</label>
+            <label>Длина петли рециркуляции, м
+              <input id="water-recirculation-length" type="number" min="0" step="0.1" placeholder="Не проложена" />
+            </label>
+            <button class="primary" id="water-calculate" type="button">Посчитать воду</button>
+            <button class="primary" id="water-save" type="button" disabled>Сохранить версию</button>
+          </fieldset>
+        </form>
+        <section id="water-result" class="result-block" hidden></section>
+      </section>
+
+      <section class="panel" aria-labelledby="sewage-heading">
+        <h2 id="sewage-heading">Канализация</h2>
+        <p class="hint">Лежаки задаются по комнатам из водоснабжения (используются их `ID комнаты`). Если канализационные приборы есть, а не все комнаты покрыты лежаками, расчёт вернёт `requires_engineer_review` с пояснением (TaskCheck P2). Все размеры Ø50 и Ø110; Ø100 не используется (D3).</p>
+        <form id="sewage-form">
+          <fieldset id="sewage-controls" disabled>
+            <legend class="visually-hidden">Канализация объекта</legend>
+            <fieldset class="santeh-subset">
+              <legend>Лежаки канализации</legend>
+              <div id="sewage-mains"></div>
+              <button class="secondary" id="sewage-add-main" type="button">+ Добавить лежак</button>
+            </fieldset>
+            <label>Количество стояков, шт
+              <input id="sewage-standpipes" type="number" min="0" step="1" placeholder="0" />
+            </label>
+            <label>Количество трапов (включаются в цену точек Ø50)
+              <input id="sewage-trap-count" type="number" min="0" step="1" placeholder="Неизвестно" />
+            </label>
+            <fieldset class="santeh-subset">
+              <legend>Уже выполненные закладные</legend>
+              <p class="hint">Выберите работы, которые заказчик уже сделал — они не попадут в смету.</p>
+              <div id="sewage-already-executed" class="santeh-checklist"></div>
+            </fieldset>
+            <button class="primary" id="sewage-calculate" type="button">Посчитать канализацию</button>
+            <button class="primary" id="sewage-save" type="button" disabled>Сохранить версию</button>
+          </fieldset>
+        </form>
+        <section id="sewage-result" class="result-block" hidden></section>
+      </section>
+
+      <section class="panel" aria-labelledby="versions-heading">
+        <h2 id="versions-heading">Сохранённые версии</h2>
+        <details id="water-versions-details" open>
+          <summary>Водоснабжение</summary>
+          <ul id="water-versions" class="santeh-versions"></ul>
+        </details>
+        <details id="sewage-versions-details" open>
+          <summary>Канализация</summary>
+          <ul id="sewage-versions" class="santeh-versions"></ul>
+        </details>
+      </section>
+
+      <p class="hint">Снимок цен работ подставляется автоматически. Изменения в <a href="/works" target="_blank" rel="noopener noreferrer">справочнике работ</a> потребуют перезагрузки страницы — текущая вкладка отправит устаревший снимок и сервер вернёт 409.</p>
+    </main>
+    <script type="module" src="/santeh.js"></script>
+  </body>
+</html>

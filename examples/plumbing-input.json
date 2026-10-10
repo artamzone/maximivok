@@ -1,0 +1,24 @@
+{
+  "rooms": [
+    {
+      "roomId": "bath-1",
+      "fixtures": [
+        { "type": "bath", "count": 1, "lengthM": 6, "comment": "основная ванная" },
+        { "type": "sink", "count": 1, "lengthM": 3 },
+        { "type": "toilet", "count": 1, "lengthM": 2 },
+        { "type": "hygiene_shower", "count": 1 }
+      ],
+      "hasRecirculation": true
+    },
+    {
+      "roomId": "kitchen",
+      "fixtures": [
+        { "type": "kitchen_sink", "count": 1, "lengthM": 4 },
+        { "type": "dishwasher", "count": 1 }
+      ],
+      "hasRecirculation": false
+    }
+  ],
+  "hotWaterSource": "two_loop_boiler",
+  "recirculationLengthM": 14
+}

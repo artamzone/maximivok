@@ -1,6 +1,24 @@
 import { createObjectMaterialsSummary } from "./materials.js";
 
 const objectMaterials = createObjectMaterialsSummary();
+const santehLink = document.querySelector("#object-santeh-link");
+const santehSummary = document.querySelector("#santeh-summary");
+const santehHint = document.querySelector("#santeh-link-hint");
+const santehError = document.querySelector("#object-santeh-error");
+
+function updateSantehLink(objectId, plumbingCount, sewageCount) {
+  if (objectId === null) {
+    santehLink.hidden = true;
+    santehHint.textContent = "Сначала сохраните карточку объекта.";
+    santehSummary.textContent = "Версий водоснабжения: 0, канализации: 0.";
+    return;
+  }
+  santehLink.hidden = false;
+  santehLink.href = `/santeh?objectId=${encodeURIComponent(objectId)}`;
+  santehHint.textContent = "Откроется в новой вкладке. Параметры и стоимость можно считать без сохранения.";
+  santehSummary.textContent = `Версий водоснабжения: ${plumbingCount}, канализации: ${sewageCount}.`;
+  santehError.hidden = true;
+}
 const form = document.querySelector("#heating-form");
 const roomsContainer = document.querySelector("#rooms");
 const roomTemplate = document.querySelector("#room-template");
@@ -409,6 +427,7 @@ async function loadObject(objectId) {
       renderReport(latest.report, latest.parameters, "Загружена последняя сохранённая версия.");
     }
     saveNote.textContent = `Карточка сохранена. Новый расчёт будет добавлен как отдельная версия (${details.calculations.length + 1}).`;
+    updateSantehLink(details.id, details.plumbingCalculations.length, details.sewageCalculations.length);
     await loadObjects();
     if (mobileLayout.matches) setObjectsExpanded(false);
   } catch (error) {
@@ -423,6 +442,7 @@ function startNewObject() {
   resetRooms();
   resultElement.hidden = true;
   resultElement.replaceChildren();
+  updateSantehLink(null, 0, 0);
   saveNote.textContent = "Можно сохранить только карточку, заполнив имя клиента и адрес.";
   void loadObjects();
   formControl("clientName").focus();

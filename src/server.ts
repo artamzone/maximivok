@@ -4,14 +4,20 @@ import process from "node:process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { calculateHeating } from "./calculator.js";
+import { calculatePlumbing } from "./plumbing.js";
+import { parsePlumbingInput } from "./plumbing-validation.js";
+import { calculateSewage } from "./sewage.js";
+import { parseSewageInput } from "./sewage-validation.js";
 import { getHeatingRulesView } from "./rules.js";
 import type { ProjectRepository } from "./projects.js";
 import {
   parseCalculationDraft,
   parseCreateObjectDraft,
   parseObjectCardDraft,
+  parsePlumbingCalculationDraft,
+  parseSewageCalculationDraft,
 } from "./project-validation.js";
-import { SqliteProjectRepository } from "./storage.js";
+import { PlumbingRevisionConflictError, SewageRevisionConflictError, SqliteProjectRepository } from "./storage.js";
 import { SqliteCatalogRepository } from "./catalog-storage.js";
 import { parseCatalogQuery } from "./catalog-query.js";
 import { MaterialConflictError, parseMaterialsDraft } from "./materials.js";
@@ -32,6 +38,8 @@ const staticFiles = new Map([
   ["/works.js", { file: "works.js", contentType: "text/javascript; charset=utf-8" }],
   ["/rules", { file: "rules.html", contentType: "text/html; charset=utf-8" }],
   ["/rules.js", { file: "rules.js", contentType: "text/javascript; charset=utf-8" }],
+  ["/santeh", { file: "santeh.html", contentType: "text/html; charset=utf-8" }],
+  ["/santeh.js", { file: "santeh.js", contentType: "text/javascript; charset=utf-8" }],
   ["/styles.css", { file: "styles.css", contentType: "text/css; charset=utf-8" }],
 ]);
 
@@ -91,7 +99,9 @@ function objectRoute(pathname: string): { objectId: string; calculations: boolea
 }
 
 function sendRequestError(response: ServerResponse, error: unknown): void {
-  if (error instanceof MaterialConflictError || error instanceof WorkPriceConflictError) {
+  if (error instanceof MaterialConflictError || error instanceof WorkPriceConflictError
+      || error instanceof PlumbingRevisionConflictError
+      || error instanceof SewageRevisionConflictError) {
     sendJson(response, 409, { error: error.message });
     return;
   }
@@ -158,6 +168,20 @@ async function handleApiRequest(
     return true;
   }
 
+  if (request.method === "POST" && pathname === "/api/plumbing") {
+    const input = parsePlumbingInput(await readJsonBody(request));
+    const workPrices = repository instanceof SqliteProjectRepository ? repository.works.getPlumbingPrices() : undefined;
+    sendJson(response, 200, calculatePlumbing(input, workPrices));
+    return true;
+  }
+
+  if (request.method === "POST" && pathname === "/api/sewage") {
+    const input = parseSewageInput(await readJsonBody(request));
+    const workPrices = repository instanceof SqliteProjectRepository ? repository.works.getSewagePrices() : undefined;
+    sendJson(response, 200, calculateSewage(input, workPrices));
+    return true;
+  }
+
   if (request.method === "GET" && pathname === "/api/objects") {
     sendJson(response, 200, { objects: repository.listObjects() });
     return true;
@@ -169,6 +193,36 @@ async function handleApiRequest(
       repository instanceof SqliteProjectRepository ? repository.works.getHeatingPrices() : undefined);
     const details = repository.createObject(draft, report);
     sendJson(response, 201, details);
+    return true;
+  }
+
+  if (request.method === "POST" && pathname.endsWith("/plumbing")) {
+    const objectId = decodeURIComponent(pathname.slice("/api/objects/".length, -"/plumbing".length));
+    const draft = parsePlumbingCalculationDraft(await readJsonBody(request));
+    const workPrices = draft.workPrices;
+    const report = calculatePlumbing(draft.input, workPrices);
+    if (!(repository instanceof SqliteProjectRepository)) {
+      sendJson(response, 503, { error: "Сохранение расчёта водоснабжения недоступно без SQLite." });
+      return true;
+    }
+    const calculation = repository.addPlumbingCalculation(objectId, draft, report);
+    if (calculation === null) sendJson(response, 404, { error: "Объект не найден." });
+    else sendJson(response, 201, calculation);
+    return true;
+  }
+
+  if (request.method === "POST" && pathname.endsWith("/sewage")) {
+    const objectId = decodeURIComponent(pathname.slice("/api/objects/".length, -"/sewage".length));
+    const draft = parseSewageCalculationDraft(await readJsonBody(request));
+    const workPrices = draft.workPrices;
+    const report = calculateSewage(draft.input, workPrices);
+    if (!(repository instanceof SqliteProjectRepository)) {
+      sendJson(response, 503, { error: "Сохранение расчёта канализации недоступно без SQLite." });
+      return true;
+    }
+    const calculation = repository.addSewageCalculation(objectId, draft, report);
+    if (calculation === null) sendJson(response, 404, { error: "Объект не найден." });
+    else sendJson(response, 201, calculation);
     return true;
   }
 

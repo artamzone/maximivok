@@ -5,7 +5,11 @@ import type {
   ObjectDraft,
   ParameterMetadataDraft,
   ParameterSource,
+  PlumbingCalculationDraft,
+  SewageCalculationDraft,
 } from "./projects.js";
+import { parsePlumbingInput, parsePlumbingWorkPricesDraft } from "./plumbing-validation.js";
+import { parseSewageInput, parseSewageWorkPricesDraft } from "./sewage-validation.js";
 import { InputValidationError, parseHeatingInput } from "./validation.js";
 
 const inputSources = new Set<ParameterSource>(["", "client", "engineer", "project_document"]);
@@ -173,4 +177,88 @@ export function parseCalculationDraft(value: unknown): CalculationDraft {
   const result = parseCalculation(value, issues);
   if (issues.length > 0) throw new InputValidationError(issues);
   return result;
+}
+
+export function parsePlumbingCalculationDraft(value: unknown): PlumbingCalculationDraft {
+  const issues: string[] = [];
+  if (!isRecord(value)) throw new InputValidationError(["ожидается JSON-объект"]);
+  const record = value as Record<string, unknown>;
+  let input: ReturnType<typeof parsePlumbingInput> | undefined;
+  try {
+    input = parsePlumbingInput(record.input);
+  } catch (error: unknown) {
+    if (error instanceof InputValidationError) {
+      issues.push(...error.issues.map((issue) => `input.${issue}`));
+    } else {
+      throw error;
+    }
+  }
+  const parameterMetadata = parseParameterMetadata(record.parameterMetadata, issues);
+  let workPricesDraft: ReturnType<typeof parsePlumbingWorkPricesDraft> | undefined;
+  try {
+    workPricesDraft = parsePlumbingWorkPricesDraft(record.workPrices, "workPrices");
+  } catch (error: unknown) {
+    if (error instanceof InputValidationError) {
+      issues.push(...error.issues);
+    } else {
+      throw error;
+    }
+  }
+  if (input !== undefined) {
+    const validPaths = new Set(leafPaths(input, "input"));
+    for (const metadata of parameterMetadata) {
+      if (!validPaths.has(metadata.path)) {
+        issues.push(`parameterMetadata: параметр ${metadata.path} отсутствует во входных данных`);
+      }
+    }
+  }
+  if (issues.length > 0) throw new InputValidationError(issues);
+  return {
+    input: input as ReturnType<typeof parsePlumbingInput>,
+    parameterMetadata,
+    workPrices: workPricesDraft!.prices,
+    baseRevision: workPricesDraft!.baseRevision,
+  };
+}
+
+export function parseSewageCalculationDraft(value: unknown): SewageCalculationDraft {
+  const issues: string[] = [];
+  if (!isRecord(value)) throw new InputValidationError(["ожидается JSON-объект"]);
+  const record = value as Record<string, unknown>;
+  let input: ReturnType<typeof parseSewageInput> | undefined;
+  try {
+    input = parseSewageInput(record.input, "input");
+  } catch (error: unknown) {
+    if (error instanceof InputValidationError) {
+      issues.push(...error.issues);
+    } else {
+      throw error;
+    }
+  }
+  const parameterMetadata = parseParameterMetadata(record.parameterMetadata, issues);
+  let workPricesDraft: ReturnType<typeof parseSewageWorkPricesDraft> | undefined;
+  try {
+    workPricesDraft = parseSewageWorkPricesDraft(record.workPrices, "workPrices");
+  } catch (error: unknown) {
+    if (error instanceof InputValidationError) {
+      issues.push(...error.issues);
+    } else {
+      throw error;
+    }
+  }
+  if (input !== undefined) {
+    const validPaths = new Set(leafPaths(input, "input"));
+    for (const metadata of parameterMetadata) {
+      if (!validPaths.has(metadata.path)) {
+        issues.push(`parameterMetadata: параметр ${metadata.path} отсутствует во входных данных`);
+      }
+    }
+  }
+  if (issues.length > 0) throw new InputValidationError(issues);
+  return {
+    input: input as ReturnType<typeof parseSewageInput>,
+    parameterMetadata,
+    workPrices: workPricesDraft!.prices,
+    baseRevision: workPricesDraft!.baseRevision,
+  };
 }

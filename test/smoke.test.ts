@@ -13,15 +13,15 @@ async function withServer(run: (url: string) => Promise<void>): Promise<void> {
   finally { server.close(); await once(server, "close"); }
 }
 
-test("все ресурсы TASK-03 открываются, каталог работ показывает 35 строк", async () => {
+test("все ресурсы TASK-03 открываются, каталог работ показывает 41 строку", async () => {
   await withServer(async (url) => {
-    const resources = ["/", "/app.js", "/styles.css", "/catalog", "/catalog.js", "/materials.js", "/works", "/works.js", "/rules", "/rules.js"];
+    const resources = ["/", "/app.js", "/styles.css", "/catalog", "/catalog.js", "/materials.js", "/works", "/works.js", "/rules", "/rules.js", "/santeh", "/santeh.js"];
     for (const p of resources) {
       const res = await fetch(url + p);
       assert.equal(res.status, 200, p);
     }
     const works = await (await fetch(`${url}/api/works`)).json();
-    assert.equal(works.items.length, 35);
+    assert.equal(works.items.length, 41);
     const fh = works.items.find((x: { id: string }) => x.id === "floor_heating")!;
     const ins = works.items.find((x: { id: string }) => x.id === "insulation")!;
     assert.equal(fh?.priceRub, 600);

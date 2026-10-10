@@ -1,0 +1,8 @@
+{
+  "revision": 0,
+  "sewagePoint50Rub": 1500,
+  "sewagePoint110Rub": 2500,
+  "sewerMainPerMeterRub": 1000,
+  "standpipeRub": 3000,
+  "markupPercent": 45
+}

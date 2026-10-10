@@ -1,6 +1,6 @@
 import type { HeatingWorkPrices } from "./types.js";
 
-/** All 35 labor rows from the «ОТОПЛЕНИЕ» section of «Смета работ.xlsx». */
+/** 35 labor rows from the «ОТОПЛЕНИЕ» section of «Смета работ.xlsx», plumbing works (B), and sewage works (D1). */
 export const workDefinitions = [
   { id: "heating_boiler_wall_double", name: "Монтаж настенного двухконтурного котла до 30 кВт", unit: "ед.", priceRub: 12000, appliedToHeating: false },
   { id: "heating_boiler_wall_single", name: "Монтаж настенного одноконтурного котла до 30 кВт", unit: "ед.", priceRub: 12000, appliedToHeating: false },
@@ -37,6 +37,12 @@ export const workDefinitions = [
   { id: "heating_polypropylene_pipe", name: "Прокладка магистральных труб системы отопления (полипропилен) до Ø32 мм", unit: "ед.", priceRub: 150, appliedToHeating: false },
   { id: "heating_solid_fuel_flue", name: "Монтаж дымохода твердотопливного котла ( проход через стену, установка площадки, установка до 8 метров)", unit: "ед.", priceRub: 25000, appliedToHeating: false },
   { id: "heating_radiator_install", name: "Сборка и монтаж радиатора отопления", unit: "ед.", priceRub: 5000, appliedToHeating: false },
+  { id: "plumbing_recirculation", name: "Монтаж рециркуляции ГВС (до 5 точек)", unit: "м", priceRub: 1000, appliedToHeating: false },
+  { id: "plumbing_trap_install", name: "Монтаж трапа", unit: "шт.", priceRub: 2000, appliedToHeating: false },
+  { id: "sewage_point_50", name: "Монтаж точки канализации Ø50 (раковина, мойка, душ, ванна, стиральная/посудомойка)", unit: "точка", priceRub: 1500, appliedToHeating: false },
+  { id: "sewage_point_110", name: "Монтаж точки канализации Ø110 (унитаз)", unit: "точка", priceRub: 2500, appliedToHeating: false },
+  { id: "sewer_main", name: "Прокладка канализационного лежака (Ø50/Ø110)", unit: "м", priceRub: 1000, appliedToHeating: false },
+  { id: "sewage_standpipe", name: "Монтаж фанового стояка", unit: "шт", priceRub: 3000, appliedToHeating: false },
 ] as const;
 
 export const defaultMarkupPercent = 45;
