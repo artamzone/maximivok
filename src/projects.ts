@@ -116,6 +116,7 @@ export interface ObjectSummary {
   updatedAt: string;
   latestCalculationAt: string | null;
   latestCalculationStatus: CalculationStatus | null;
+  archivedAt: string | null;
 }
 
 export interface ObjectDetails {
@@ -128,13 +129,16 @@ export interface ObjectDetails {
   calculations: SavedCalculation[];
   plumbingCalculations: SavedPlumbingCalculation[];
   sewageCalculations: SavedSewageCalculation[];
+  archivedAt: string | null;
 }
 
 export interface ProjectRepository {
-  listObjects(): ObjectSummary[];
+  listObjects(options?: { includeArchived?: boolean }): ObjectSummary[];
   getObject(objectId: string): ObjectDetails | null;
   createObject(draft: CreateObjectDraft, report: HeatingReport | null): ObjectDetails;
   updateObject(objectId: string, client: ClientDraft, object: ObjectDraft): ObjectDetails | null;
+  archiveObject(objectId: string): ObjectDetails | null;
+  restoreObject(objectId: string): ObjectDetails | null;
   addCalculation(objectId: string, draft: CalculationDraft, report: HeatingReport): SavedCalculation | null;
   addPlumbingCalculation(objectId: string, draft: PlumbingCalculationDraft, report: PlumbingReport): SavedPlumbingCalculation | null;
   addSewageCalculation(objectId: string, draft: SewageCalculationDraft, report: SewageReport): SavedSewageCalculation | null;

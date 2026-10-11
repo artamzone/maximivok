@@ -634,7 +634,7 @@ async function initializeSanteh(objectId) {
   function populateFromSavedPlumbing(saved) {
     if (!saved) return null;
     return {
-      rooms: (saved.input.rooms ?? []).map((r) => ({
+      rooms: (saved.rooms ?? []).map((r) => ({
         id: r.roomId,
         name: "",
         hasRecirculation: r.hasRecirculation === undefined ? null : r.hasRecirculation,
@@ -645,8 +645,8 @@ async function initializeSanteh(objectId) {
           comment: f.comment ?? "",
         })),
       })),
-      recirculationLengthM: saved.input.recirculationLengthM ?? null,
-      hotWaterSource: saved.input.hotWaterSource ?? "unknown",
+      recirculationLengthM: saved.recirculationLengthM ?? null,
+      hotWaterSource: saved.hotWaterSource ?? "unknown",
     };
   }
 
@@ -657,6 +657,8 @@ async function initializeSanteh(objectId) {
     try {
       objectDetails = await api(`/api/objects/${objectIdEncoded}`);
       objectLabel.textContent = `${objectDetails.client.name} · ${objectDetails.object.address}${objectDetails.object.name ? ` · ${objectDetails.object.name}` : ""}`;
+      renderSewageWorkChecklist();
+      renderVersions();
       renderSewageWorkChecklist();
       renderVersions();
 
@@ -707,7 +709,8 @@ async function initializeSanteh(objectId) {
       status.textContent = `Загружено. Версий водоснабжения: ${objectDetails.plumbingCalculations.length}, канализации: ${objectDetails.sewageCalculations.length}.`;
     } catch (error) {
       showError(error);
-      status.textContent = "Не удалось загрузить объект.";
+      const detail = error instanceof Error ? error.message : String(error);
+      status.textContent = `Не удалось загрузить объект: ${detail}`;
     } finally { setBusy(false); }
   }
 

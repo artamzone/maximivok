@@ -356,32 +356,87 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
+let showArchived = false;
+
 function renderObjectList(objects) {
   if (objects.length === 0) {
-    objectList.innerHTML = '<p class="muted">Сохранённых объектов пока нет.</p>';
+    objectList.innerHTML = `<p class="muted">${showArchived ? "Архив пуст." : "Сохранённых объектов пока нет."}</p>`;
     return;
   }
-  objectList.innerHTML = objects.map((object) => `
-    <button class="object-item${object.id === activeObjectId ? " active" : ""}" type="button" data-object-id="${escapeHtml(object.id)}">
-      <strong>${escapeHtml(object.objectName ?? object.address)}</strong>
-      <span>${escapeHtml(object.clientName)}</span>
-      <span class="status ${object.latestCalculationStatus === null ? "status-empty" : statusClass(object.latestCalculationStatus)}">${escapeHtml(object.latestCalculationStatus === null ? "Без расчёта" : (statusLabels[object.latestCalculationStatus] ?? "Без расчёта"))}</span>
-      <small>${escapeHtml(object.address)} · ${escapeHtml(formatDate(object.latestCalculationAt))}</small>
-    </button>
-  `).join("");
-  objectList.querySelectorAll("[data-object-id]").forEach((button) => {
-    button.addEventListener("click", () => void loadObject(button.dataset.objectId));
+  objectList.innerHTML = objects.map((object) => {
+    const isArchived = object.archivedAt !== null && object.archivedAt !== undefined;
+    return `
+    <div class="object-item${object.id === activeObjectId ? " active" : ""}${isArchived ? " archived" : ""}" data-object-id="${escapeHtml(object.id)}" role="button" tabindex="0">
+      <div class="object-item-body">
+        <strong>${escapeHtml(object.objectName ?? object.address)}</strong>
+        <span>${escapeHtml(object.clientName)}</span>
+        <span class="status ${object.latestCalculationStatus === null ? "status-empty" : statusClass(object.latestCalculationStatus)}">${escapeHtml(object.latestCalculationStatus === null ? "Без расчёта" : (statusLabels[object.latestCalculationStatus] ?? "Без расчёта"))}</span>
+        <small>${escapeHtml(object.address)} · ${escapeHtml(formatDate(object.latestCalculationAt))}</small>
+        ${isArchived ? `<small class="archived-label">В архиве с ${escapeHtml(formatDate(object.archivedAt))}</small>` : ""}
+      </div>
+      <div class="object-item-actions">
+        ${isArchived
+          ? `<button class="secondary" data-restore="${escapeHtml(object.id)}" type="button">Восстановить</button>`
+          : `<button class="secondary" data-archive="${escapeHtml(object.id)}" type="button">В архив</button>`}
+      </div>
+    </div>
+  `;}).join("");
+  objectList.querySelectorAll("[data-object-id]").forEach((item) => {
+    const id = item.dataset.objectId;
+    item.addEventListener("click", (event) => {
+      if (event.target instanceof HTMLElement && event.target.closest("[data-archive],[data-restore]")) return;
+      void loadObject(id);
+    });
+    item.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void loadObject(id); }
+    });
   });
+  objectList.querySelectorAll("[data-archive]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void archiveObject(button.dataset.archive);
+    });
+  });
+  objectList.querySelectorAll("[data-restore]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void restoreObject(button.dataset.restore);
+    });
+  });
+}
+
+async function archiveObject(objectId) {
+  if (!confirm("Переместить карточку в архив? Клиент и реквизиты сохранятся, новые расчёты добавлять будет нельзя, пока не восстановите.")) return;
+  try {
+    await api(`/api/objects/${encodeURIComponent(objectId)}/archive`, { method: "POST" });
+    await loadObjects();
+  } catch (error) { alert(escapeHtml(error.message)); }
+}
+
+async function restoreObject(objectId) {
+  try {
+    await api(`/api/objects/${encodeURIComponent(objectId)}/restore`, { method: "POST" });
+    await loadObjects();
+  } catch (error) { alert(escapeHtml(error.message)); }
 }
 
 async function loadObjects() {
   void objectMaterials.setObject(activeObjectId);
   try {
-    const payload = await api("/api/objects");
+    const url = showArchived ? "/api/objects?includeArchived=true" : "/api/objects";
+    const payload = await api(url);
     renderObjectList(payload.objects);
+    updateArchiveToggle();
   } catch (error) {
     objectList.innerHTML = `<p class="error-text">${escapeHtml(error.message)}</p>`;
   }
+}
+
+function updateArchiveToggle() {
+  const toggle = document.getElementById("archive-toggle");
+  if (toggle === null) return;
+  toggle.checked = showArchived;
+  toggle.parentElement?.classList.toggle("is-active", showArchived);
 }
 
 function setValue(name, value) {
@@ -520,6 +575,14 @@ function refreshMaterialsOnReturn() {
 }
 window.addEventListener("focus", refreshMaterialsOnReturn);
 document.addEventListener("visibilitychange", refreshMaterialsOnReturn);
+
+const archiveToggle = document.getElementById("archive-toggle");
+if (archiveToggle instanceof HTMLInputElement) {
+  archiveToggle.addEventListener("change", () => {
+    showArchived = archiveToggle.checked;
+    void loadObjects();
+  });
+}
 
 resetRooms();
 void loadObjects();

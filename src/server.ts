@@ -183,7 +183,9 @@ async function handleApiRequest(
   }
 
   if (request.method === "GET" && pathname === "/api/objects") {
-    sendJson(response, 200, { objects: repository.listObjects() });
+    const objectsUrl = new URL(request.url ?? "/", "http://localhost");
+    const includeArchived = objectsUrl.searchParams.get("includeArchived") === "true";
+    sendJson(response, 200, { objects: repository.listObjects({ includeArchived }) });
     return true;
   }
 
@@ -196,8 +198,27 @@ async function handleApiRequest(
     return true;
   }
 
+  if (request.method === "POST" && pathname.endsWith("/archive")) {
+    const objectId = decodeURIComponent(pathname.slice("/api/objects/".length, -"/archive".length));
+    const details = repository.archiveObject(objectId);
+    if (details === null) sendJson(response, 404, { error: "Объект не найден." });
+    else sendJson(response, 200, details);
+    return true;
+  }
+
+  if (request.method === "POST" && pathname.endsWith("/restore")) {
+    const objectId = decodeURIComponent(pathname.slice("/api/objects/".length, -"/restore".length));
+    const details = repository.restoreObject(objectId);
+    if (details === null) sendJson(response, 404, { error: "Объект не найден." });
+    else sendJson(response, 200, details);
+    return true;
+  }
+
   if (request.method === "POST" && pathname.endsWith("/plumbing")) {
     const objectId = decodeURIComponent(pathname.slice("/api/objects/".length, -"/plumbing".length));
+    const existing = repository.getObject(objectId);
+    if (existing === null) { sendJson(response, 404, { error: "Объект не найден." }); return true; }
+    if (existing.archivedAt !== null) { sendJson(response, 409, { error: "Карточка в архиве; сначала восстановите её.", archivedAt: existing.archivedAt }); return true; }
     const draft = parsePlumbingCalculationDraft(await readJsonBody(request));
     const workPrices = draft.workPrices;
     const report = calculatePlumbing(draft.input, workPrices);
@@ -213,6 +234,9 @@ async function handleApiRequest(
 
   if (request.method === "POST" && pathname.endsWith("/sewage")) {
     const objectId = decodeURIComponent(pathname.slice("/api/objects/".length, -"/sewage".length));
+    const existing = repository.getObject(objectId);
+    if (existing === null) { sendJson(response, 404, { error: "Объект не найден." }); return true; }
+    if (existing.archivedAt !== null) { sendJson(response, 409, { error: "Карточка в архиве; сначала восстановите её.", archivedAt: existing.archivedAt }); return true; }
     const draft = parseSewageCalculationDraft(await readJsonBody(request));
     const workPrices = draft.workPrices;
     const report = calculateSewage(draft.input, workPrices);
@@ -237,6 +261,9 @@ async function handleApiRequest(
   }
 
   if (request.method === "PATCH" && !route.calculations) {
+    const existing = repository.getObject(route.objectId);
+    if (existing === null) { sendJson(response, 404, { error: "Объект не найден." }); return true; }
+    if (existing.archivedAt !== null) { sendJson(response, 409, { error: "Карточка в архиве; сначала восстановите её.", archivedAt: existing.archivedAt }); return true; }
     const draft = parseObjectCardDraft(await readJsonBody(request));
     const details = repository.updateObject(route.objectId, draft.client, draft.object);
     if (details === null) sendJson(response, 404, { error: "Объект не найден." });
@@ -245,6 +272,9 @@ async function handleApiRequest(
   }
 
   if (request.method === "POST" && route.calculations) {
+    const existing = repository.getObject(route.objectId);
+    if (existing === null) { sendJson(response, 404, { error: "Объект не найден." }); return true; }
+    if (existing.archivedAt !== null) { sendJson(response, 409, { error: "Карточка в архиве; сначала восстановите её.", archivedAt: existing.archivedAt }); return true; }
     const draft = parseCalculationDraft(await readJsonBody(request));
     const calculation = repository.addCalculation(route.objectId, draft, calculateHeating(draft.input,
       repository instanceof SqliteProjectRepository ? repository.works.getHeatingPrices() : undefined));

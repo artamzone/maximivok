@@ -84,11 +84,17 @@ button { border-radius: 9px; padding: 10px 15px; font-weight: 750; }
 
 .object-toggle { display: none; }
 .object-list { display: grid; gap: 9px; }
-.object-item { display: grid; gap: 4px; width: 100%; padding: 12px; text-align: left; border: 1px solid var(--line); background: #fbfcfb; color: inherit; }
+.object-item { display: flex; gap: 12px; align-items: center; width: 100%; padding: 12px; text-align: left; border: 1px solid var(--line); background: #fbfcfb; color: inherit; cursor: pointer; }
 .object-item:hover, .object-item.active { border-color: var(--green); background: #eef7f2; }
-.object-item > span:not(.status) { color: #35423d; font-size: .9rem; }
-.object-item .status { justify-self: start; font-size: .75rem; }
-.object-item small { color: var(--muted); line-height: 1.35; }
+.object-item.archived { background: #f3f3f1; opacity: .8; }
+.object-item-body { display: grid; gap: 4px; flex: 1; }
+.object-item-body > span:not(.status) { color: #35423d; font-size: .9rem; }
+.object-item-body .status { justify-self: start; font-size: .75rem; }
+.object-item-body small { color: var(--muted); line-height: 1.35; }
+.object-item-body .archived-label { color: var(--warning); }
+.object-item-actions { display: flex; gap: 6px; }
+.archive-toggle { display: flex; align-items: center; gap: 6px; margin: 6px 0 10px; font-size: .9rem; color: var(--muted); }
+.archive-toggle.is-active { color: var(--green-dark); }
 
 .result-heading { margin-bottom: 20px; }
 .result-heading h2 { margin-bottom: 0; }

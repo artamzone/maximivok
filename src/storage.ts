@@ -51,7 +51,8 @@ const schema = `
     name TEXT,
     notes TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    archived_at TEXT
   );
 
   CREATE TABLE IF NOT EXISTS calculations (
@@ -97,6 +98,7 @@ type ObjectRow = {
   object_notes: string | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
 };
 
 type CalculationRow = {
@@ -126,6 +128,7 @@ type SummaryRow = {
   updated_at: string;
   latest_calculation_at: string | null;
   latest_calculation_status: CalculationStatus | null;
+  archived_at: string | null;
 };
 
 function leafPaths(value: unknown, prefix: string): string[] {
@@ -229,6 +232,13 @@ export class SqliteProjectRepository implements ProjectRepository {
     if (needsBlockIndex) {
       this.#database.exec("CREATE INDEX IF NOT EXISTS idx_calculations_object_block ON calculations(object_id, block, created_at DESC)");
     }
+    // Архивирование карточек (TASK-05+: мягкое удаление).
+    const objectsColumns = this.#database.prepare("PRAGMA table_info(client_objects)").all() as Array<{ name: string }>;
+    const objectColumnNames = new Set(objectsColumns.map((column) => column.name));
+    if (!objectColumnNames.has("archived_at")) {
+      this.#database.exec("ALTER TABLE client_objects ADD COLUMN archived_at TEXT");
+    }
+    this.#database.exec("CREATE INDEX IF NOT EXISTS idx_objects_archived ON client_objects(organization_id, archived_at)");
     // Расширение CHECK: для новых БД (созданных по schema) уже 'heating'|'plumbing'|'sewage'.
     // Для существующих БД ограничение могло быть 'heating'|'plumbing' — пересоздаём таблицу через 12-шаговый процесс.
     this.#expandBlockCheck();
@@ -281,10 +291,12 @@ export class SqliteProjectRepository implements ProjectRepository {
     this.#database.exec("PRAGMA foreign_keys = ON");
   }
 
-  public listObjects(): ObjectSummary[] {
+  public listObjects(options?: { includeArchived?: boolean }): ObjectSummary[] {
+    const includeArchived = options?.includeArchived === true;
+    const archiveFilter = includeArchived ? "" : " AND o.archived_at IS NULL";
     const rows = this.#database.prepare(`
       SELECT o.id, o.organization_id, c.name AS client_name, o.name AS object_name,
-             o.address, o.updated_at,
+             o.address, o.updated_at, o.archived_at,
              (SELECT cal.created_at FROM calculations cal
               WHERE cal.object_id = o.id AND cal.organization_id = o.organization_id
               ORDER BY cal.created_at DESC, cal.rowid DESC LIMIT 1) AS latest_calculation_at,
@@ -293,8 +305,8 @@ export class SqliteProjectRepository implements ProjectRepository {
               ORDER BY cal.created_at DESC, cal.rowid DESC LIMIT 1) AS latest_calculation_status
       FROM client_objects o
       JOIN clients c ON c.id = o.client_id AND c.organization_id = o.organization_id
-      WHERE o.organization_id = ?
-      ORDER BY o.updated_at DESC, o.id DESC
+      WHERE o.organization_id = ?${archiveFilter}
+      ORDER BY o.archived_at IS NULL DESC, o.updated_at DESC, o.id DESC
     `).all(LOCAL_ORGANIZATION_ID) as SummaryRow[];
     return rows.map((row) => ({
       id: row.id,
@@ -305,6 +317,7 @@ export class SqliteProjectRepository implements ProjectRepository {
       updatedAt: row.updated_at,
       latestCalculationAt: row.latest_calculation_at,
       latestCalculationStatus: row.latest_calculation_status,
+      archivedAt: row.archived_at,
     }));
   }
 
@@ -313,7 +326,7 @@ export class SqliteProjectRepository implements ProjectRepository {
       SELECT o.id, o.organization_id, o.client_id, c.name AS client_name,
              c.phone AS client_phone, c.email AS client_email, c.notes AS client_notes,
              o.address, o.name AS object_name, o.notes AS object_notes,
-             o.created_at, o.updated_at
+             o.created_at, o.updated_at, o.archived_at
       FROM client_objects o
       JOIN clients c ON c.id = o.client_id AND c.organization_id = o.organization_id
       WHERE o.id = ? AND o.organization_id = ?
@@ -349,6 +362,7 @@ export class SqliteProjectRepository implements ProjectRepository {
       calculations,
       plumbingCalculations,
       sewageCalculations,
+      archivedAt: row.archived_at,
     };
   }
 
@@ -381,9 +395,10 @@ export class SqliteProjectRepository implements ProjectRepository {
 
   public updateObject(objectId: string, client: ClientDraft, object: ObjectDraft): ObjectDetails | null {
     const row = this.#database.prepare(`
-      SELECT client_id FROM client_objects WHERE id = ? AND organization_id = ?
-    `).get(objectId, LOCAL_ORGANIZATION_ID) as { client_id: string } | undefined;
+      SELECT client_id, archived_at FROM client_objects WHERE id = ? AND organization_id = ?
+    `).get(objectId, LOCAL_ORGANIZATION_ID) as { client_id: string; archived_at: string | null } | undefined;
     if (row === undefined) return null;
+    if (row.archived_at !== null) return null;
     const now = new Date().toISOString();
     this.#database.exec("BEGIN IMMEDIATE");
     try {
@@ -403,11 +418,34 @@ export class SqliteProjectRepository implements ProjectRepository {
     return this.getObject(objectId);
   }
 
+  public archiveObject(objectId: string): ObjectDetails | null {
+    const now = new Date().toISOString();
+    const result = this.#database.prepare(`
+      UPDATE client_objects SET archived_at = ?, updated_at = ?
+      WHERE id = ? AND organization_id = ? AND archived_at IS NULL
+    `).run(now, now, objectId, LOCAL_ORGANIZATION_ID);
+    if (result.changes === 0) {
+      // Либо объект не существует, либо уже в архиве — оставляем как есть, но вернём актуальный state.
+      return this.getObject(objectId);
+    }
+    return this.getObject(objectId);
+  }
+
+  public restoreObject(objectId: string): ObjectDetails | null {
+    const now = new Date().toISOString();
+    this.#database.prepare(`
+      UPDATE client_objects SET archived_at = NULL, updated_at = ?
+      WHERE id = ? AND organization_id = ? AND archived_at IS NOT NULL
+    `).run(now, objectId, LOCAL_ORGANIZATION_ID);
+    return this.getObject(objectId);
+  }
+
   public addCalculation(objectId: string, draft: CalculationDraft, report: HeatingReport): SavedCalculation | null {
     const exists = this.#database.prepare(`
-      SELECT 1 AS found FROM client_objects WHERE id = ? AND organization_id = ?
-    `).get(objectId, LOCAL_ORGANIZATION_ID);
+      SELECT 1 AS found, archived_at FROM client_objects WHERE id = ? AND organization_id = ?
+    `).get(objectId, LOCAL_ORGANIZATION_ID) as { found: number; archived_at: string | null } | undefined;
     if (exists === undefined) return null;
+    if (exists.archived_at !== null) return null;
     const now = new Date().toISOString();
     this.#database.exec("BEGIN IMMEDIATE");
     try {
@@ -429,9 +467,10 @@ export class SqliteProjectRepository implements ProjectRepository {
     report: PlumbingReport,
   ): SavedPlumbingCalculation | null {
     const exists = this.#database.prepare(`
-      SELECT 1 AS found FROM client_objects WHERE id = ? AND organization_id = ?
-    `).get(objectId, LOCAL_ORGANIZATION_ID);
+      SELECT 1 AS found, archived_at FROM client_objects WHERE id = ? AND organization_id = ?
+    `).get(objectId, LOCAL_ORGANIZATION_ID) as { found: number; archived_at: string | null } | undefined;
     if (exists === undefined) return null;
+    if (exists.archived_at !== null) return null;
     const now = new Date().toISOString();
     this.#database.exec("BEGIN IMMEDIATE");
     try {
@@ -459,9 +498,10 @@ export class SqliteProjectRepository implements ProjectRepository {
     report: SewageReport,
   ): SavedSewageCalculation | null {
     const exists = this.#database.prepare(`
-      SELECT 1 AS found FROM client_objects WHERE id = ? AND organization_id = ?
-    `).get(objectId, LOCAL_ORGANIZATION_ID);
+      SELECT 1 AS found, archived_at FROM client_objects WHERE id = ? AND organization_id = ?
+    `).get(objectId, LOCAL_ORGANIZATION_ID) as { found: number; archived_at: string | null } | undefined;
     if (exists === undefined) return null;
+    if (exists.archived_at !== null) return null;
     const now = new Date().toISOString();
     this.#database.exec("BEGIN IMMEDIATE");
     try {
